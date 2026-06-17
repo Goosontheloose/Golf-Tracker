@@ -1,131 +1,178 @@
+
 import streamlit as st
 import requests
 import pandas as pd
 
 # ==========================================
-# 1. CONFIGURATION & API SETUP
+# 1. CONFIGURATION & SCALING
 # ==========================================
+st.set_page_config(page_title="US Open: The Syndicate Derby", layout="wide")
+
+# API Setup
 API_KEY = st.secrets["api_key"]
-API_URL = "https://live-golf-data.p.rapidapi.com/leaderboard"
+URL = "https://live-golf-data.p.rapidapi.com/leaderboard"
 
-st.set_page_config(page_title="Friendship Derby", layout="wide")
+# Tournament Parameters (Set to 2024 for testing, update to 2026 when live)
+PARAMS = {"orgId": "1", "tournId": "026", "year": "2024"} 
+HEADERS = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
 
 # ==========================================
-# 2. THE TEAM DATA (Paste your Excel data here)
+# 2. THE SYNDICATE DATA (Paste your 100 people here)
 # ==========================================
-# Format: Friend Name [TAB] Player 1 [TAB] Player 2 [TAB] Player 3
 RAW_EXCEL_DATA = """
-Frederik	Rory McIlroy	Jordan Spieth	Bryson DeChambeau
-Martin	Scottie Scheffler	Patrick Cantlay	Matt Fitzpatrick
-Spanner	Rory McIlroy	Scottie Scheffler	Bryson DeChambeau
-"""
+Frederik	Bryson DeChambeau	Russel Henley	Colin Morikawa
+Wynand	Rory Mcllroy	Sam Burns	Tommy Fleetwood
+Jason	Tony Finau	Corey Connors	Akshay Bhatia
+Martin	Patrick Cantlay	Thomas Detry	Sergio Garcia
+Frederik  2	Thomas Detry	Sam Burns	Corey Connors
+Jason 2	Bryson DeChambeau	Thomas Detry	Sergio Garcia
+Wynand 2	Patrick Cantlay	Tony Finau	Akshay Bhatia
+Martin 2	Tony Finau	Tommy Fleetwood	Russel Henley
+Rupert	Patrick Cantlay	Tony Finau	Tommy Fleetwood
+Rupert 3	Akshay Bhatia	Sergio Garcia	Bryson DeChambeau
 
-def get_teams_from_excel(raw_data):
-    teams = {}
+""" # Add all 100 names here following this tab-separated format
+
+# ==========================================
+# 3. CHAMPIONSHIP BRUTALISM STYLING
+# ==========================================
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@900&family=JetBrains+Mono:wght@500&display=swap');
+    
+    :root {
+        --fairway: #064E3B;
+        --gold: #EAB308;
+        --bunker: #F5F5F4;
+    }
+
+    .stApp { background-color: var(--bunker); background-image: radial-gradient(#000 1px, transparent 0); background-size: 30px 30px; }
+    
+    h1, h2, h3 { font-family: 'Inter', sans-serif !important; font-weight: 900 !important; text-transform: uppercase; color: #000; }
+    
+    .podium-card {
+        background: white;
+        border: 4px solid #000;
+        padding: 25px;
+        box-shadow: 10px 10px 0px #000;
+        margin-bottom: 30px;
+    }
+
+    .metric-value { font-family: 'JetBrains Mono', monospace; font-size: 3rem; font-weight: bold; }
+    
+    .marquee {
+        background: var(--fairway);
+        color: var(--gold);
+        padding: 10px 0;
+        font-family: 'Inter', sans-serif;
+        font-weight: 900;
+        border-bottom: 4px solid #000;
+        margin-bottom: 40px;
+    }
+    
+    .player-row {
+        background: white;
+        border: 2px solid #000;
+        padding: 10px 20px;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# 4. CORE ENGINE (API & LOGIC)
+# ==========================================
+
+@st.cache_data(ttl=600) # Refreshes every 10 minutes to save API credits
+def get_live_scores():
+    try:
+        response = requests.get(URL, headers=HEADERS, params=PARAMS)
+        data = response.json()
+        rows = data.get('leaderboardRows', [])
+        
+        score_map = {}
+        for r in rows:
+            name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower()
+            score = r.get('toParValue', 0)
+            if score == "E": score = 0
+            score_map[name] = int(score)
+        return score_map, rows
+    except Exception as e:
+        st.error(f"Engine Failure: {e}")
+        return {}, []
+
+def parse_syndicate_teams(raw_data):
+    teams = []
     lines = raw_data.strip().split('\n')
     for line in lines:
         parts = line.split('\t')
-        if len(parts) >= 2:
-            friend_name = parts[0].strip()
-            players = [p.strip() for p in parts[1:] if p.strip()]
-            teams[friend_name] = players
+        if len(parts) >= 4:
+            teams.append({
+                "owner": parts[0],
+                "players": [p.strip().lower() for p in parts[1:4]]
+            })
     return teams
 
-TEAMS = get_teams_from_excel(RAW_EXCEL_DATA)
-
 # ==========================================
-# 3. DATA FETCHING & PROCESSING
+# 5. UI GENERATION
 # ==========================================
-def parse_score(val):
-    """Converts API strings like '-6' or 'E' into usable numbers."""
-    if not val or str(val).upper() in ["E", "EVEN", "-", "CUT"]:
-        return 0
-    try:
-        # Removes "+" and converts string to integer
-        return int(str(val).replace("+", ""))
-    except ValueError:
-        return 0
 
-@st.cache_data(ttl=60)
-def get_leaderboard_data(year):
-    querystring = {"orgId": "1", "tournId": "026", "year": str(year)}
-    headers = {
-        "X-RapidAPI-Key": API_KEY,
-        "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"
-    }
-    try:
-        response = requests.get(API_URL, headers=headers, params=querystring)
-        data = response.json()
-        # The API provides data in 'leaderboardRows'
-        return data.get('leaderboardRows', [])
-    except Exception as e:
-        st.error(f"API Error: {e}")
-        return []
+# 1. Header Marquee
+st.markdown('<div class="marquee"><marquee scrollamount="12">THE SHINNECOCK SYNDICATE // 2026 US OPEN // 100 PLAYERS // LIVE FROM NEW YORK</marquee></div>', unsafe_allow_html=True)
+st.title("🏆 The Syndicate Derby")
 
-# ==========================================
-# 4. MAIN APP UI
-# ==========================================
-st.title("⛳ US Open: Friendship Derby")
+# Get Data
+score_map, pro_rows = get_live_scores()
+syndicate_teams = parse_syndicate_teams(RAW_EXCEL_DATA)
 
-with st.sidebar:
-    st.header("Settings")
-    selected_year = st.selectbox("Select Season", [2024, 2025, 2026], index=0)
-    if st.button("🔄 Refresh Scores"):
-        st.cache_data.clear()
+# Calculate Leaderboard
+leaderboard = []
+for team in syndicate_teams:
+    total = sum(score_map.get(p, 0) for p in team['players'])
+    leaderboard.append({
+        "Owner": team['owner'],
+        "Score": total,
+        "Team": ", ".join([p.title() for p in team['players']])
+    })
 
-rows = get_leaderboard_data(selected_year)
+df_leaderboard = pd.DataFrame(leaderboard).sort_values("Score")
 
-if not rows:
-    st.warning("No data found. Check your API key or Year selection.")
-else:
-    # 1. Map API data to a searchable dictionary
-    player_scores = {}
-    for row in rows:
-        # Based on your screenshot: firstName and lastName are top-level
-        fname = row.get('firstName', '').strip()
-        lname = row.get('lastName', '').strip()
-        full_name = f"{fname} {lname}".lower()
-        
-        # 'total' is the score field (e.g., "-6")
-        raw_score = row.get('total', '0')
-        player_scores[full_name] = parse_score(raw_score)
+# 2. The Podium (Top 3)
+st.subheader("The Championship Flight")
+col1, col2, col3 = st.columns(3)
+top_3 = df_leaderboard.head(3).to_dict('records')
 
-    # 2. Calculate Team Totals
-    leaderboard_results = []
-    for friend, roster in TEAMS.items():
-        total_team_score = 0
-        roster_details = []
-        for p_name in roster:
-            # Match the name from your Excel list
-            p_score = player_scores.get(p_name.lower().strip(), 0)
-            total_team_score += p_score
-            roster_details.append({"name": p_name, "score": p_score})
-        
-        leaderboard_results.append({
-            "Friend": friend,
-            "Total Score": total_team_score,
-            "Roster": roster_details
-        })
+for i, (col, color) in enumerate(zip([col1, col2, col3], ["#EAB308", "#94A3B8", "#B45309"])):
+    if i < len(top_3):
+        with col:
+            st.markdown(f"""
+                <div class="podium-card" style="border-color: {color}">
+                    <h3 style="color: {color}">#{i+1} {top_3[i]['Owner']}</h3>
+                    <div class="metric-value">{top_3[i]['Score']}</div>
+                    <p style="font-size: 0.8rem; color: #666;">{top_3[i]['Team']}</p>
+                </div>
+            """, unsafe_allow_html=True)
 
-    # 3. Sort by lowest score (Golf rules)
-    leaderboard_results = sorted(leaderboard_results, key=lambda x: x["Total Score"])
+# 3. The Pack (All 100 Players)
+st.subheader("The Full Derby Field")
+for _, row in df_leaderboard.iloc[3:].iterrows():
+    st.markdown(f"""
+        <div class="player-row">
+            <div><strong>{row['Owner']}</strong> <span style="margin-left: 20px; color: #666; font-size: 0.8rem;">{row['Team']}</span></div>
+            <div style="font-family: 'JetBrains Mono'; font-weight: bold;">{row['Score']}</div>
+        </div>
+    """, unsafe_allow_html=True)
 
-    # 4. Display Results
-    for idx, entry in enumerate(leaderboard_results):
-        rank = idx + 1
-        with st.container():
-            col1, col2 = st.columns([1, 4])
-            with col1:
-                st.metric(label=f"Rank #{rank}", value=entry["Total Score"], delta=None)
-            with col2:
-                st.subheader(entry["Friend"])
-                # Show individual player contributions
-                player_line = " | ".join([f"{p['name']}: {p['score']}" for p in entry["Roster"]])
-                st.caption(player_line)
-            st.divider()
+# 4. Pro Master Board
+with st.expander("📊 VIEW OFFICIAL TOURNAMENT MASTER BOARD"):
+    st.write("Live Professional Field at Shinnecock Hills")
+    pro_df = pd.DataFrame(pro_rows)[['position', 'firstName', 'lastName', 'thru', 'toParValue']]
+    st.table(pro_df)
 
-    # DEBUG: Help with name spelling
-    with st.expander("🛠️ Debug: Check API Player Names"):
-        st.write("If a score is 0 but shouldn't be, match the spelling in your RAW_EXCEL_DATA to these names:")
-        all_names = sorted(list(player_scores.keys()))
-        st.write(", ".join(all_names))
+# 5. The Engine Room (Debug Info)
+with st.expander("🛠️ THE ENGINE ROOM (DEBUG)"):
+    st.write("If someone has a score of 0 and shouldn't, check their name spelling against this list:")
+    st.write(list(score_map.keys()))
