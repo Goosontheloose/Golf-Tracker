@@ -32,7 +32,7 @@ st.markdown("""
 # ==========================================
 # IMPORTANT: Ensure there is a TAB between the name and the players
 RAW_EXCEL_DATA = """
-Martin	Patrick Cantlay	Thomas Detry	Sergio Garcia
+Martin	Patrick Cantlay	"rory mcilroy"	Sergio Garcia
 Frederik 2	Thomas Detry	Sam Burns	Corey Conners
 Jason 2	bryson dechambeau	Thomas Detry	Sergio Garcia
 Wynand 2	Patrick Cantlay	Tony Finau	Akshay Bhatia
