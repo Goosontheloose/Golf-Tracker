@@ -5,7 +5,7 @@ import pandas as pd
 # ==========================================
 # 1. CONFIGURATION & API SETUP
 # ==========================================
-API_KEY = "213c2f2306mshe3d8b437cc34999p108477jsn6f448fb2b30c"
+API_KEY = st.secrets["api_key"]
 API_URL = "https://live-golf-data.p.rapidapi.com/leaderboard"
 
 st.set_page_config(page_title="Friendship Derby", layout="wide")
@@ -17,6 +17,7 @@ st.set_page_config(page_title="Friendship Derby", layout="wide")
 RAW_EXCEL_DATA = """
 Frederik	Rory McIlroy	Jordan Spieth	Bryson DeChambeau
 Martin	Scottie Scheffler	Patrick Cantlay	Matt Fitzpatrick
+Spanner	Rory McIlroy	Scottie Scheffler	Bryson DeChambeau
 """
 
 def get_teams_from_excel(raw_data):
