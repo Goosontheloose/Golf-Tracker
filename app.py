@@ -34,11 +34,11 @@ st.markdown("""
 RAW_EXCEL_DATA = """
 Martin	Patrick Cantlay	Thomas Detry	Sergio Garcia
 Frederik 2	Thomas Detry	Sam Burns	Corey Conners
-Jason 2	Bryson Dechambeau	Thomas Detry	Sergio Garcia
+Jason 2	bryson dechambeau	Thomas Detry	Sergio Garcia
 Wynand 2	Patrick Cantlay	Tony Finau	Akshay Bhatia
-Martin 2	Tony Finau	Tommy Fleetwood	Russel Henley
-Rupert	Patrick Cantlay	Tony Finau	Tommy Fleetwood
-Rupert 3	Akshay Bhatia	Sergio Garcia	Bryson Dechambeau
+Martin 2	Tony Finau	tommy fleetwood	russel henley
+Rupert	Patrick Cantlay	tony finau	tommy fleetwood
+Rupert 3	akshay bhatia	sergio garcia	bryson dechambeau
 """ 
 
 # ==========================================
@@ -90,8 +90,8 @@ def parse_teams(raw_data):
 # 4. DASHBOARD RENDER
 # ==========================================
 
-st.markdown('<div class="marquee"><marquee scrollamount="12">THE SHINNECOCK SYNDICATE // 2026 US OPEN // 100 PLAYERS // LIVE FEED ONLINE</marquee></div>', unsafe_allow_html=True)
-st.title("🏆 THE SYNDICATE DERBY")
+st.markdown('<div class="marquee"><marquee scrollamount="12">THE SHINNECOCK SYNDICATE // 2026 US OPEN // 100 BETS // LIVE FEED ONLINE</marquee></div>', unsafe_allow_html=True)
+st.title("🏆 THE US OPEN PREDICTION TRACKER")
 
 # Fetch and Process
 score_map, pro_rows = get_engine_data()
