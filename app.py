@@ -8,7 +8,7 @@ st.set_page_config(page_title="The Syndicate Derby 2026", layout="wide")
 
 # Securely pull API Key from Streamlit Secrets
 try:
-    RAPID_API_KEY = st.secrets["RAPID_API_KEY"]
+    RAPID_API_KEY = st.secrets["api_key"]
 except KeyError:
     st.error("API Key 'RAPID_API_KEY' not found in Secrets. Please add it to your Streamlit Cloud settings.")
     st.stop()
