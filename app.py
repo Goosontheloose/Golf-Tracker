@@ -246,7 +246,7 @@ def get_teams(raw_text):
                 counter += 1
                 
             teams_dict[user] = golfers
-    return teams_dic
+    return teams_dict
 
 TEAMS = get_teams(RAW_DATA)
 
