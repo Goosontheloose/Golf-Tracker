@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 
 # --- 1. SETTINGS & BRANDING ---
-st.set_page_config(page_title="The Syndicate Derby", layout="wide")
+st.set_page_config(page_title="The US OPEN 2026", layout="wide")
 
 st.markdown("""
 <style>
@@ -65,7 +65,7 @@ def get_data():
 
 # --- 3. EXECUTION ---
 def main():
-    st.markdown("<h1>🏆 THE SYNDICATE DERBY</h1>", unsafe_allow_html=True)
+    st.markdown("<h1>🏆 US OPEN 2026 PREDICTIONS</h1>", unsafe_allow_html=True)
     rows = get_data()
     
     if rows:
@@ -85,23 +85,36 @@ def main():
                 "Thru": thru
             })
 
-        results = []
+            results = []
         for user, roster in TEAMS.items():
             total = 0
             html = ""
             for p in roster:
                 all_picks.append(p)
-                p_data = player_map.get(p.lower(), {"score": 0, "thru": "N/A"})
-                total += p_data["score"]
-                s = "E" if p_data['score'] == 0 else f"{'+' if p_data['score'] > 0 else ''}{p_data['score']}"
-                html += f'<div class="player-row"><span>{p}</span><span><b>{s}</b> <small>[{p_data["thru"]}]</small></span></div>'
+                
+                # 1. Check if the player actually exists in the API data
+                if p.lower() in player_map:
+                    p_data = player_map[p.lower()]
+                    score_val = p_data['score']
+                    thru_val = p_data['thru']
+                    total += score_val # Add to team total
+                    # Format the score display
+                    s = "E" if score_val == 0 else f"{'+' if score_val > 0 else ''}{score_val}"
+                else:
+                    # 2. If NOT found, set display to "Not Found" and thru to "???"
+                    s = "Not Found"
+                    thru_val = "???"
+                    # (Note: total stays the same, effectively treating them as 0/Even)
+
+                html += f'<div class="player-row"><span>{p}</span><span><b style="color: {"red" if s == "Not Found" else "inherit"}">{s}</b> <small>[{thru_val}]</small></span></div>'
+            
             results.append({"User": user, "Total": total, "HTML": html})
 
         df = pd.DataFrame(results).sort_values("Total")
         df.insert(0, 'Rank', range(1, len(df) + 1))
 
         # 1. CHAMPIONSHIP FLIGHT (TOP 5)
-        st.markdown("### CHAMPIONSHIP FLIGHT")
+        st.markdown("### TOP 5 LEADERS")
         cols = st.columns(5)
         for i, (_, r) in enumerate(df.head(5).iterrows()):
             with cols[i]:
@@ -109,7 +122,7 @@ def main():
                 st.markdown(f'<div class="podium-card"><div class="user-name">#{r["Rank"]} {r["User"]}</div><div class="podium-score">{disp}</div>{r["HTML"]}</div>', unsafe_allow_html=True)
 
         # 2. DERBY STANDINGS (Cleaned Table)
-        st.markdown("### DERBY STANDINGS")
+        st.markdown("### REST OF THE FIELD")
         standings_df = df[["Rank", "User", "Total"]].copy()
         standings_df["Total"] = standings_df["Total"].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
         
@@ -117,11 +130,11 @@ def main():
         st.dataframe(standings_df, hide_index=True, use_container_width=True)
 
         # 3. MASTER FIELD LEADERBOARD
-        st.markdown("### ⛳ MASTER FIELD LEADERBOARD")
+        st.markdown("### ⛳ US OPEN LIVE LEADERBOARD")
         st.dataframe(pd.DataFrame(pro_field).set_index("Pos"), use_container_width=True)
 
         # 4. MARKET SENTIMENT (Bottom Section)
-        st.markdown("### 📊 MARKET SENTIMENT")
+        st.markdown("### 📊 WHO DID MOST PEOPLE BET ON?")
         counts = pd.Series(all_picks).value_counts()
         m_val = counts.max()
         
