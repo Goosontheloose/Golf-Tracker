@@ -211,6 +211,37 @@ def get_teams(raw_text):
     return teams_dict
 
 TEAMS = get_teams(RAW_DATA)
+# --- SYNDICATE ANALYTICS ENGINE ---
+from collections import Counter
+from itertools import combinations
+
+# 1. Exact Triplets (3/3 same players)
+# We sort names to ensure "Tiger, Rory" is same as "Rory, Tiger"
+triplet_counts = Counter([tuple(sorted(players)) for players in TEAMS.values()])
+exact_triplets = {k: v for k, v in triplet_counts.items() if v > 1}
+
+# 2. Common Duos (2/3 same players)
+all_duos = []
+for players in TEAMS.values():
+    all_duos.extend(combinations(sorted(players), 2))
+duo_counts = Counter(all_duos).most_common(5) # Top 5 most common pairs
+
+# --- DISPLAY ANALYTICS ---
+st.markdown("### 📊 THE HIVE MIND (COMBINATIONS)")
+col_a, col_b = st.columns(2)
+
+with col_a:
+    st.write("**Exact Same Team (3/3)**")
+    if exact_triplets:
+        for players, count in exact_triplets.items():
+            st.info(f"{count} people picked: {', '.join(players)}")
+    else:
+        st.write("Every team is unique!")
+
+with col_b:
+    st.write("**Most Common Pairings (2/3)**")
+    for duo, count in duo_counts:
+        st.success(f"{count} people paired: {duo[0]} + {duo[1]}")
 def parse_score(val):
     if not val or str(val).upper() in ["E", "EVEN", "CUT"]: return 0
     try: return int(str(val).replace("+", ""))
