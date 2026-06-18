@@ -217,10 +217,9 @@ Ettienne Bedeker	Scottie Scheffler	Rory McIlroy	Brian Harman
 Ettienne Bedeker	Matt Fitzpatrick	Xander Schauffele	Cameron Smith
 Tinus Steyn	Scottie Scheffler	Rory McIlroy	Bryson DeChambeau
 Tinus Steyn	Scottie Scheffler	Jon Rahm	Brooks Koepka
-Tinus Steyn	Rory McIlroy	Cameron Young	Bryson DeChambeau
+Tinus Steyn Rory McIlroy	Cameron Young	Bryson DeChambeau
 Cornel Windell	Scottie Scheffler	Rory McIlroy	Joaquin Niemann
-Frederik	Matt Fitzpatrick	Tyrrell Hatton	Joaquin Niemann
-
+Frederik Matt Fitzpatrick	Tyrrell Hatton	Joaquin Niemann
 """
 
 def get_teams(raw_text):
