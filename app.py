@@ -40,7 +40,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- 2. DATA ---
-TEAMS = {
+RAW_DATA = """
 AJ Hechter 1	Matt Fitzpatrick	Tyrrell Hatton	Min Woo Lee
 AJ Hechter 2	Scottie Scheffler	Chris Gotterup	Cameron Smith
 Anton (Entry 1)	Scottie Scheffler	Matt Fitzpatrick	Dustin Johnson
@@ -196,8 +196,20 @@ ZT Project (Entry 7)	Patrick Reed	Matt Fitzpatrick	Shane Lowry
 ZT Project (Entry 8)	Jon Rahm	Justin Rose	Corey Conners
 ZT Project (Entry 9)	Matt Fitzpatrick	Xander Schauffele	J.T. Poston
 
-}
+"""
+def get_teams(raw_text):
+    teams_dict = {}
+    lines = raw_text.strip().split('\n')
+    for line in lines:
+        parts = line.split('\t') # Split by Excel tabs
+        if len(parts) >= 2:
+            user = parts[0].strip()
+            # Everything after the first column is a golfer
+            golfers = [g.strip() for g in parts[1:] if g.strip()]
+            teams_dict[user] = golfers
+    return teams_dict
 
+TEAMS = get_teams(RAW_DATA)
 def parse_score(val):
     if not val or str(val).upper() in ["E", "EVEN", "CUT"]: return 0
     try: return int(str(val).replace("+", ""))
