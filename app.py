@@ -1,164 +1,203 @@
 import streamlit as st
 import requests
 import pandas as pd
-import re
-from collections import Counter
+from datetime import datetime
 
-# ==========================================
-# 1. SETUP & THEME
-# ==========================================
-st.set_page_config(page_title="US Open: The Syndicate Derby", layout="wide")
+# --- APP CONFIG & SECRETS ---
+st.set_page_config(page_title="The Syndicate Derby 2026", layout="wide")
 
-# API Config
-API_KEY = "213c2f2306mshe3d8b437cc34999p108477jsn6f448fb2b30c"
-URL = "https://live-golf-data.p.rapidapi.com/leaderboard"
-HEADERS = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
-PARAMS = {"orgId": "1", "tournId": "026", "year": "2024"} 
+# Securely pull API Key from Streamlit Secrets
+try:
+    RAPID_API_KEY = st.secrets["RAPID_API_KEY"]
+except KeyError:
+    st.error("API Key 'RAPID_API_KEY' not found in Secrets. Please add it to your Streamlit Cloud settings.")
+    st.stop()
 
+# --- CSS: CHAMPIONSHIP BRUTALISM (PC & MOBILE OPTIMIZED) ---
 st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@900&family=JetBrains+Mono:wght@500&display=swap');
-    :root { --fairway: #064E3B; --gold: #EAB308; --bunker: #F5F5F4; --live: #22C55E; }
-    .stApp { background-color: var(--bunker); background-image: radial-gradient(#000 1px, transparent 0); background-size: 30px 30px; }
-    h1, h2, h3 { font-family: 'Inter', sans-serif !important; font-weight: 900 !important; text-transform: uppercase; color: #000; letter-spacing: -1px; }
-    .podium-card { background: white; border: 4px solid #000; padding: 25px; box-shadow: 10px 10px 0px #000; margin-bottom: 30px; min-height: 250px; }
-    .player-row { background: white; border: 2px solid #000; padding: 12px 20px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-    .marquee { background: var(--fairway); color: var(--gold); padding: 10px 0; font-family: 'Inter', sans-serif; font-weight: 900; border-bottom: 4px solid #000; margin-bottom: 40px; }
-    .status-tag { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; background: #000; color: #fff; padding: 2px 6px; margin-left: 5px; }
-    .live-dot { height: 8px; width: 8px; background-color: var(--live); border-radius: 50%; display: inline-block; margin-right: 5px; animation: blink 1.5s infinite; }
-    .ownership-bar { background: var(--fairway); height: 20px; border: 2px solid #000; }
-    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-    </style>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;900&display=swap');
+
+    /* Global Overrides */
+    .stApp { background-color: #F5F5F4; }
+    
+    /* Podium Cards */
+    .podium-card {
+        padding: 1.5rem;
+        border: 4px solid #064E3B;
+        background-color: white;
+        box-shadow: 6px 6px 0px #064E3B;
+        margin-bottom: 20px;
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.2s;
+    }
+
+    .podium-rank {
+        font-family: 'Inter', sans-serif;
+        font-weight: 900;
+        text-transform: uppercase;
+        color: #064E3B;
+        font-size: 1.2rem;
+        border-bottom: 2px solid #EAB308;
+        padding-bottom: 5px;
+        margin-bottom: 10px;
+    }
+
+    .podium-score {
+        font-family: 'Inter', sans-serif;
+        font-weight: 900;
+        color: #064E3B;
+        line-height: 1;
+        margin: 10px 0;
+    }
+
+    .player-list {
+        font-family: 'Inter', sans-serif;
+        font-size: 0.9rem;
+        color: #444;
+        line-height: 1.4;
+    }
+
+    /* Mobile vs Desktop Logic */
+    @media (min-width: 768px) {
+        .podium-score { font-size: 5rem; }
+        .podium-card { min-height: 280px; }
+    }
+    @media (max-width: 767px) {
+        .podium-score { font-size: 3rem; }
+        .podium-card { padding: 1rem; }
+        .stColumn { margin-bottom: 0.5rem; }
+    }
+
+    /* Dark Mode Protection (Force high-contrast colors) */
+    @media (prefers-color-scheme: dark) {
+        .podium-card, .podium-card *, .full-field-row * {
+            color: #064E3B !important;
+        }
+    }
+
+    /* Full Field Styling */
+    .full-field-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px;
+        border: 2px solid #064E3B;
+        background: white;
+        margin-bottom: 6px;
+        box-shadow: 3px 3px 0px #064E3B;
+    }
+</style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# 2. DATA INPUT
-# ==========================================
+# --- DATA RAW INPUT ---
 RAW_EXCEL_DATA = """
-Martin	Patrick Cantlay	Rory Mcilroy	Sergio Garcia
-Frederik 2	Thomas Detry	Sam Burns	Corey Conners
-Jason 2	Bryson Dechambeau	Thomas Detry	Sergio Garcia
-Wynand 2	Patrick Cantlay	Tony Finau	Akshay Bhatia
-Martin 2	Tony Finau	Tommy Fleetwood	Russel Henley
-Rupert	Patrick Cantlay	Tony Finau	Tommy Fleetwood
-Rupert 3	Akshay Bhatia	Sergio Garcia	Bryson Dechambeau
+Martin	Bryson DeChambeau	Scottie Scheffler	Rory McIlroy
+Wynand	Patrick Cantlay	Xander Schauffele	Ludvig Aberg
+Rupert	Collin Morikawa	Hideki Matsuyama	Brooks Koepka
+Frederik	Jordan Spieth	Viktor Hovland	Tommy Fleetwood
 """
 
-# ==========================================
-# 3. THE ENGINE
-# ==========================================
-
+# --- DATA ENGINE ---
 @st.cache_data(ttl=600)
-def get_engine_data():
+def get_leaderboard_data():
+    url = "https://live-golf-data.p.rapidapi.com/leaderboard"
+    # Using 2024 for testing as 2026 hasn't happened yet
+    querystring = {"orgId":"1","tournId":"026","year":"2024"}
+    headers = {
+        "X-RapidAPI-Key": RAPID_API_KEY,
+        "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"
+    }
     try:
-        response = requests.get(URL, headers=HEADERS, params=PARAMS)
-        data = response.json()
-        rows = data.get('leaderboardRows', data.get('leaderboard', []))
-        player_stats = {}
-        for r in rows:
-            fname, lname = str(r.get('firstName', '')).strip(), str(r.get('lastName', '')).strip()
-            display_name = f"{fname} {lname}"
-            raw_score = r.get('total', r.get('toParValue', 0))
-            if str(raw_score).strip().upper() == "E": final_score = 0
-            else:
-                try: final_score = int(str(raw_score).replace('+', ''))
-                except: final_score = 0
-            thru = str(r.get('thru', r.get('status', '-'))).strip()
-            player_stats[display_name.lower()] = {"score": final_score, "thru": thru, "display_name": display_name}
-        return player_stats, rows
-    except Exception as e:
-        st.error(f"Engine Failure: {e}")
-        return {}, []
+        response = requests.get(url, headers=headers, params=querystring)
+        return response.json()
+    except:
+        return None
 
-def smart_parse_teams(raw_text):
-    teams = []
-    all_picks = [] # To track ownership
-    for line in raw_text.strip().split('\n'):
-        parts = re.split(r'\t|\s{2,}', line.strip())
-        if len(parts) >= 4:
-            roster = [p.strip().strip('"').lower() for p in parts[1:4]]
-            teams.append({"owner": parts[0], "players": roster})
-            all_picks.extend(roster)
-    return teams, all_picks
+def parse_data():
+    data = get_leaderboard_data()
+    if not data or 'leaderboardRows' not in data:
+        return None
+    
+    # Create lookup for pro scores
+    pro_scores = {}
+    all_picks = []
+    for row in data['leaderboardRows']:
+        full_name = f"{row.get('firstName', '')} {row.get('lastName', '')}".strip()
+        score = row.get('toParValue', 0)
+        thru = row.get('thru', '-')
+        pro_scores[full_name.lower()] = {"score": score, "thru": thru}
+    
+    # Parse Syndicate Teams
+    syndicate_results = []
+    for line in RAW_EXCEL_DATA.strip().split('\n'):
+        parts = line.split('\t')
+        user_name = parts[0]
+        picks = parts[1:]
+        all_picks.extend(picks)
+        
+        total_score = 0
+        details = []
+        for pick in picks:
+            match = pro_scores.get(pick.lower(), {"score": 0, "thru": "-"})
+            total_score += match['score']
+            details.append(f"{pick} ({'+' if match['score'] > 0 else ''}{match['score']}) [{match['thru']}]")
+        
+        syndicate_results.append({
+            "User": user_name,
+            "Total": total_score,
+            "Picks": details,
+            "RawPicks": picks
+        })
+    
+    df = pd.DataFrame(syndicate_results).sort_values("Total")
+    return df, all_picks
 
-# ==========================================
-# 4. RENDER
-# ==========================================
-
-st.markdown('<div class="marquee"><marquee scrollamount="12">THE SHINNECOCK SYNDICATE // OWNERSHIP ANALYTICS LIVE // US OPEN 2026</marquee></div>', unsafe_allow_html=True)
+# --- MAIN UI ---
 st.title("🏆 THE SYNDICATE DERBY")
+st.subheader("SHINNECOCK HILLS · US OPEN 2026")
 
-player_stats, pro_rows = get_engine_data()
-teams, all_picks = smart_parse_teams(RAW_EXCEL_DATA)
+results_df, picks_list = parse_data()
 
-# Calculate Standings
-results = []
-for t in teams:
-    team_total = 0
-    bracket_roster = []
-    for p in t['players']:
-        score, thru, found_name = 0, "-", p.title()
-        if p in player_stats:
-            score, thru, found_name = player_stats[p]['score'], player_stats[p]['thru'], player_stats[p]['display_name']
-        else:
-            for api_name, stats in player_stats.items():
-                if p in api_name or api_name in p:
-                    score, thru, found_name = stats['score'], stats['thru'], stats['display_name']
-                    break
-        team_total += score
-        status_html = f'<span class="status-tag">THR {thru}</span>' if thru.upper() == "F" else f'<span class="status-tag"><span class="live-dot"></span>H{thru}</span>'
-        bracket_roster.append(f"{found_name} [{score if score <= 0 else '+' + str(score)}] {status_html}")
-    results.append({"Owner": t['owner'], "Total": team_total, "Roster": " <br> ".join(bracket_roster)})
-
-df = pd.DataFrame(results).sort_values("Total")
-
-# UI: PODIUM & THE PACK
-st.subheader("CHAMPIONSHIP FLIGHT")
-cols = st.columns(3)
-podium_list = df.head(3).to_dict('records')
-for i, (col, color) in enumerate(zip(cols, ["#EAB308", "#94A3B8", "#B45309"])):
-    if i < len(podium_list):
-        with col:
-            st.markdown(f'<div class="podium-card" style="border-color: {color}"><h2 style="color: {color}; margin:0;">#{i+1} {podium_list[i]["Owner"]}</h2><div style="font-family:\'JetBrains Mono\'; font-size:3.5rem; font-weight:bold; margin-bottom:10px;">{podium_list[i]["Total"]}</div><div style="font-size:0.85rem; color:#444; line-height:1.8;">{podium_list[i]["Roster"]}</div></div>', unsafe_allow_html=True)
-
-st.subheader("THE FULL FIELD")
-for _, row in df.iloc[3:].iterrows():
-    st.markdown(f'<div class="player-row"><div style="flex: 2;"><b>{row["Owner"]}</b></div><div style="flex: 6; color:#666; font-size:0.8rem;">{row["Roster"].replace(" <br> ", " • ")}</div><div style="flex: 1; text-align:right; font-family:\'JetBrains Mono\'; font-weight:bold; font-size:1.4rem;">{row["Total"]}</div></div>', unsafe_allow_html=True)
-
-# ==========================================
-# 5. THE ANALYTICS TABS (NEW)
-# ==========================================
-st.write("---")
-tab1, tab2 = st.tabs(["📊 OWNERSHIP REPORT", "📈 PRO LEADERBOARD"])
-
-with tab1:
-    st.subheader("THE MARKET SENTIMENT")
-    st.write("Who did the Syndicate bet on?")
+if results_df is not None:
+    # 1. CHAMPIONSHIP FLIGHT (PODIUM)
+    st.markdown("### 🥇 CHAMPIONSHIP FLIGHT")
+    cols = st.columns(3)
     
-    # Process pick counts
-    pick_counts = Counter(all_picks)
-    # Map back to display names for beauty
-    display_counts = {}
-    for p_lower, count in pick_counts.items():
-        # Try to get the real name from API, fallback to Title Case
-        name = player_stats.get(p_lower, {}).get('display_name', p_lower.title())
-        display_counts[name] = count
-    
-    owner_df = pd.DataFrame(list(display_counts.items()), columns=['Golfer', 'Selections']).sort_values('Selections', ascending=False)
-    
-    # Render Ownership Bars
-    for _, row in owner_df.iterrows():
-        pct = (row['Selections'] / len(teams)) * 100
-        st.markdown(f"""
-            <div style="margin-bottom:15px;">
-                <div style="display:flex; justify-content:space-between; font-family:'JetBrains Mono'; font-weight:bold;">
-                    <span>{row['Golfer']}</span>
-                    <span>{row['Selections']} PICKS ({pct:.1f}%)</span>
+    top_3 = results_df.head(3)
+    for i, (idx, row) in enumerate(top_3.iterrows()):
+        with cols[i]:
+            score_display = "E" if row['Total'] == 0 else f"{'+' if row['Total'] > 0 else ''}{row['Total']}"
+            st.markdown(f"""
+                <div class="podium-card">
+                    <div class="podium-rank">#{i+1} {row['User']}</div>
+                    <div class="podium-score">{score_display}</div>
+                    <div class="player-list">{"<br>".join(row['Picks'])}</div>
                 </div>
-                <div class="ownership-bar" style="width: {pct}%"></div>
-            </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-with tab2:
-    if pro_rows:
-        st.dataframe(pd.DataFrame(pro_rows)[['position', 'firstName', 'lastName', 'thru', 'total']], use_container_width=True)
+    # 2. FULL FIELD & OWNERSHIP TABS
+    tab1, tab2 = st.tabs(["📊 FULL STANDINGS", "🎯 MARKET SENTIMENT"])
+    
+    with tab1:
+        for idx, row in results_df.iterrows():
+            score_display = "E" if row['Total'] == 0 else f"{'+' if row['Total'] > 0 else ''}{row['Total']}"
+            st.markdown(f"""
+                <div class="full-field-row">
+                    <span style="font-weight:900;">{row['User']}</span>
+                    <span style="color:#064E3B; font-weight:900;">{score_display}</span>
+                </div>
+            """, unsafe_allow_html=True)
+
+    with tab2:
+        st.markdown("### MOST SELECTED PLAYERS")
+        counts = pd.Series(picks_list).value_counts()
+        st.bar_chart(counts)
+        st.dataframe(counts, column_config={"count": "Selections", "value": "Pro Player"})
+
+else:
+    st.error("Waiting for live data... Please check your API key and Tournament ID.")
+
+# --- FOOTER ---
+st.caption(f"Last updated: {datetime.now().strftime('%H:%M:%S')} · Data cached for 10 mins")
