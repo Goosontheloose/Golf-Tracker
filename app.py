@@ -6,53 +6,44 @@ from datetime import datetime
 # --- APP CONFIG ---
 st.set_page_config(page_title="The Syndicate Derby", layout="wide")
 
-# Securely pull API Key exactly as you have it named
+# Secure API Key call
 try:
-    RAPID_API_KEY = st.secrets["api_key"]
+    API_KEY = st.secrets["api_key"]
 except KeyError:
-    st.error("Secret 'api_key' not found. Please check your Streamlit Cloud settings.")
+    st.error("Secret 'api_key' not found in Streamlit settings.")
     st.stop()
 
-# --- MOBILE-FIRST CSS (Fixed for scaling and visibility) ---
+# --- CHAMPIONSHIP BRUTALISM CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@900&display=swap');
     .stApp { background-color: #F5F5F4; }
     
+    /* Podium & Layout */
     .podium-card {
         padding: 1.5rem;
         border: 4px solid #064E3B;
         background-color: white;
         box-shadow: 6px 6px 0px #064E3B;
         margin-bottom: 20px;
-        min-height: 250px;
-        display: flex;
-        flex-direction: column;
     }
-
     .podium-score {
         font-family: 'Inter', sans-serif;
         font-weight: 900;
         color: #064E3B;
-        /* Responsive font: Big on PC, scales down on Mobile */
-        font-size: clamp(2.5rem, 10vw, 5rem);
+        font-size: clamp(2.5rem, 8vw, 4.5rem);
         line-height: 1;
-        margin: 10px 0;
     }
-
-    .podium-card *, .full-field-row * {
-        color: #064E3B !important;
-    }
-
-    /* Fix for mobile stacking */
+    .podium-card *, .full-field-row * { color: #064E3B !important; }
+    
+    /* Desktop vs Mobile Columns */
     @media (max-width: 767px) {
-        .stColumn { margin-bottom: 10px; }
-        .podium-card { padding: 1rem; min-height: auto; }
+        .stColumn { margin-bottom: 12px; }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- DATA RAW INPUT ---
+# --- USER DATA ---
 RAW_EXCEL_DATA = """
 Martin	Bryson DeChambeau	Scottie Scheffler	Rory McIlroy
 Wynand	Patrick Cantlay	Xander Schauffele	Ludvig Aberg
@@ -62,94 +53,81 @@ Frederik	Jordan Spieth	Viktor Hovland	Tommy Fleetwood
 
 # --- DATA ENGINE ---
 @st.cache_data(ttl=600)
-def get_leaderboard_data():
+def get_live_data():
     url = "https://live-golf-data.p.rapidapi.com/leaderboard"
-    # Using 2024 US Open Data (Tourn 026)
-    querystring = {"orgId":"1","tournId":"026","year":"2024"}
-    headers = {
-        "X-RapidAPI-Key": RAPID_API_KEY,
-        "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"
-    }
-    response = requests.get(url, headers=headers, params=querystring)
-    return response.json()
+    params = {"orgId":"1", "tournId":"026", "year":"2024"}
+    headers = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
+    try:
+        r = requests.get(url, headers=headers, params=params)
+        return r.json().get('leaderboardRows', [])
+    except:
+        return []
 
-def parse_data():
-    data = get_leaderboard_data()
-    # Correcting the data mapping back to what worked yesterday
-    if not data or 'leaderboardRows' not in data:
-        return None, []
+def process_standings():
+    rows = get_live_data()
+    if not rows: return None, []
     
-    pro_scores = {}
+    # Map pros to their scores/thru
+    pro_map = {}
+    for p in rows:
+        name = f"{p.get('firstName','')} {p.get('lastName','')}".strip().lower()
+        pro_map[name] = {"score": p.get('toParValue', 0), "thru": p.get('thru', '-')}
+    
+    results = []
     all_picks = []
-    for row in data['leaderboardRows']:
-        # Match names exactly as they appear in the API
-        fname = row.get('firstName', '')
-        lname = row.get('lastName', '')
-        full_name = f"{fname} {lname}".strip().lower()
-        
-        # Use toParValue for the numerical score
-        pro_scores[full_name] = {
-            "score": row.get('toParValue', 0),
-            "thru": row.get('thru', 'F')
-        }
-    
-    syndicate_results = []
     for line in RAW_EXCEL_DATA.strip().split('\n'):
         parts = line.split('\t')
-        user_name = parts[0]
+        user = parts[0]
         picks = parts[1:]
         all_picks.extend(picks)
         
-        total_score = 0
-        details = []
+        u_total = 0
+        u_details = []
         for pick in picks:
-            # Check for the pro in our dictionary
-            match = pro_scores.get(pick.lower(), {"score": 0, "thru": "-"})
-            score_val = match['score']
-            total_score += score_val
+            data = pro_map.get(pick.lower(), {"score": 0, "thru": "-"})
+            s = data['score']
+            u_total += s
+            txt_score = "E" if s == 0 else f"{'+' if s > 0 else ''}{s}"
+            u_details.append(f"{pick} {txt_score} [{data['thru']}]")
             
-            # Format display string (e.g., "-4 [F]")
-            sign = "+" if score_val > 0 else ""
-            disp_score = "E" if score_val == 0 else f"{sign}{score_val}"
-            details.append(f"{pick} {disp_score} [{match['thru']}]")
-        
-        syndicate_results.append({
-            "User": user_name,
-            "Total": total_score,
-            "Picks": details
-        })
+        results.append({"User": user, "Total": u_total, "Picks": u_details})
     
-    df = pd.DataFrame(syndicate_results).sort_values("Total")
-    return df, all_picks
+    return pd.DataFrame(results).sort_values("Total"), all_picks
 
-# --- MAIN UI ---
+# --- UI RENDERING ---
 st.title("🏆 THE SYNDICATE DERBY")
+df, picks = process_standings()
 
-results_df, picks_list = parse_data()
-
-if results_df is not None:
-    # Top 3 Podium
+if df is not None:
+    # 1. Top 3 Podium
+    st.markdown("### 🥇 CHAMPIONSHIP FLIGHT")
     cols = st.columns(3)
-    top_3 = results_df.head(3)
-    for i, (idx, row) in enumerate(top_3.iterrows()):
+    for i, (_, row) in enumerate(df.head(3).iterrows()):
         with cols[i]:
-            score_display = "E" if row['Total'] == 0 else f"{'+' if row['Total'] > 0 else ''}{row['Total']}"
+            disp = "E" if row['Total'] == 0 else f"{'+' if row['Total'] > 0 else ''}{row['Total']}"
             st.markdown(f"""
                 <div class="podium-card">
-                    <div style="font-weight:900; text-transform:uppercase;">#{i+1} {row['User']}</div>
-                    <div class="podium-score">{score_display}</div>
-                    <div style="font-size:0.9rem;">{"<br>".join(row['Picks'])}</div>
+                    <div style="font-weight:900;">#{i+1} {row['User']}</div>
+                    <div class="podium-score">{disp}</div>
+                    <div style="font-size:0.85rem; line-height:1.4;">{"<br>".join(row['Picks'])}</div>
                 </div>
             """, unsafe_allow_html=True)
 
-    # Tabs for Standings and Market Sentiment
-    tab1, tab2 = st.tabs(["📊 FULL STANDINGS", "🎯 MARKET SENTIMENT"])
+    # 2. Main Standings & Sentiment
+    tab1, tab2 = st.tabs(["📊 MAIN LEADERBOARD", "🎯 MARKET SENTIMENT"])
+    
     with tab1:
-        st.dataframe(results_df[["User", "Total"]], use_container_width=True, hide_index=True)
-    with tab2:
-        counts = pd.Series(picks_list).value_counts()
-        st.bar_chart(counts)
-else:
-    st.warning("No data found. Check your API key and connection.")
+        # Beautifully formatted full list
+        display_df = df[["User", "Total"]].copy()
+        display_df['Total'] = display_df['Total'].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
+        st.table(display_df)
 
-st.caption(f"Last updated: {datetime.now().strftime('%H:%M:%S')}")
+    with tab2:
+        st.markdown("### MOST PICKED PROS")
+        sentiment = pd.Series(picks).value_counts().reset_index()
+        sentiment.columns = ['Player', 'Selections']
+        st.bar_chart(data=sentiment, x='Player', y='Selections', color="#064E3B")
+else:
+    st.error("API Error: No data returned. Please verify your API Key and network.")
+
+st.caption(f"Refreshed: {datetime.now().strftime('%H:%M:%S')}")
