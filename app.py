@@ -17,16 +17,25 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DATA ---
-RAW_EXCEL_DATA = """
-Martin	Bryson DeChambeau	Scottie Scheffler	Rory McIlroy
-Wynand	Patrick Cantlay	Xander Schauffele	Ludvig Aberg
-Rupert	Collin Morikawa	Hideki Matsuyama	Brooks Koepka
-Frederik	Jordan Spieth	Viktor Hovland	Tommy Fleetwood
-"""
+# --- 2. DATA INPUT ---
+TEAMS = {
+    "Martin": ["Bryson DeChambeau", "Scottie Scheffler", "Rory McIlroy"],
+    "Wynand": ["Patrick Cantlay", "Xander Schauffele", "Ludvig Aberg"],
+    "Rupert": ["Collin Morikawa", "Hideki Matsuyama", "Brooks Koepka"],
+    "Frederik": ["Jordan Spieth", "Viktor Hovland", "Tommy Fleetwood"]
+}
+
+# --- 3. HELPER LOGIC ---
+def parse_score(val):
+    if not val or str(val).upper() in ["E", "EVEN", "CUT"]:
+        return 0
+    try:
+        return int(str(val).replace("+", ""))
+    except:
+        return 0
 
 @st.cache_data(ttl=600)
-def get_data():
+def get_leaderboard_data():
     url = "https://live-golf-data.p.rapidapi.com/leaderboard"
     params = {"orgId":"1", "tournId":"026", "year":"2024"}
     headers = {
@@ -34,93 +43,69 @@ def get_data():
         "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"
     }
     try:
-        r = requests.get(url, headers=headers, params=params)
-        return r.json().get('leaderboardRows', [])
+        response = requests.get(url, headers=headers, params=params)
+        return response.json().get('leaderboardRows', [])
     except:
         return []
 
-def parse_score(val):
-    """Robustly converts API score values to integers."""
-    if val is None:
-        return 0
-    s_val = str(val).strip().upper()
-    if s_val in ["E", "EVEN", ""]:
-        return 0
-    try:
-        # Handles "+2", "-6", etc.
-        return int(s_val.replace("+", ""))
-    except ValueError:
-        return 0
-
-# --- 3. LOGIC ---
-def run():
-    rows = get_data()
-    
-    # Map API data to names
-    api_map = {}
-    for r in rows:
-        # Create full name key
-        fname = r.get('firstName', '')
-        
-        # Check multiple potential keys for the score relative to par
-        raw_score = r.get('toParValue') 
-        if raw_score is None:
-            raw_score = r.get('toPar') # Often a string like "-6"
-            
-        api_map[name] = {
-            "score": parse_score(raw_score),
-            "thru": r.get('thru', 'F')
-        }
-
-    # Match Excel picks to API map
-    results = []
-    for line in RAW_EXCEL_DATA.strip().split('\n'):
-        parts = line.split('\t')
-        if not parts: continue
-        user, picks = parts[0], parts[1:]
-        user_total = 0
-        html = ""
-        
-        for p in picks:
-            p_clean = p.strip().lower()
-            # Find the match in the api_map
-            match = None
-            for api_name, data in api_map.items():
-                if p_clean in api_name or api_name in p_clean:
-                    match = data
-                    break
-            
-            if match:
-                s = match['score']
-                thru = match['thru']
-            else:
-                s = 0
-                thru = "N/A"
-            
-            user_total += s
-            s_str = "E" if s == 0 else-row"><span>{p}</span><span><b>{s_str}</b> [{thru}]</span></div>'
-            
-        results.append({"User": user, "Score": user_total, "HTML": html})
-
-    df = pd.DataFrame(results).sort_values("Score")
-
-    # --- 4. UI ---
+# --- 4. MAIN APP ---
+def run_app():
     st.markdown("<h1 style='color:#064E3B; font-family:Inter; font-weight:900;'>🏆 THE SYNDICATE DERBY</h1>", unsafe_allow_html=True)
     
-    # Podium (Top 3)
-    cols = st.columns(3)
-    for i, (_, row) in enumerate(df.head(3).iterrows()):
-        with cols[i]:
-            disp = "E" if row['Score'] == 0 else f"{'+' if row['Score'] > 0 else '' class="podium-score">{disp}</div>
-                    {row['HTML']}
-                </div>
-            """, unsafe_allow_html=True)
+    rows = get_leaderboard_data()
+    
+    if rows:
+        # Create Player Map (Using 'total' key as per your working version)
+        player_scores = {}
+        for row in rows:
+            fname = row.get('firstName', '').strip()
+            lname = row.get('lastName', '').strip()
+            full_name = f"{fname} {lname}".lower()
+            raw_score = row.get('total', '0') 
+            player_scores[full_name] = {
+                "score": parse_score(raw_score),
+                "thru": row.get('thru', 'F')
+            }
 
-    # Standings Table
-    st.markdown("### FULL STANDINGS")
-    display_df = df[["User", "Score"]].copy()
-    display_df["Score"] = display_df["Score"].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
-    st.table(display_df.set_index("User"))
+        # Calculate Team Standings
+        leaderboard_results = []
+        for friend, roster in TEAMS.items():
+            total_score = 0
+            roster_html = ""
+            for p_name in roster:
+                p_data = player_scores.get(p_name.lower().strip(), {"score": 0, "thru": "N/A"})
+                p_score = p_data["score"]
+                total_score += p_score
+                s_str = "E" if p_score == 0 else f"{'+' if p_score > 0 else ''}{p_score}"
+                roster_html += f'<div class="player-row"><span>{p_name}</span><span><b>{s_str}</b> [{p_data["thru"]}]</span></div>'
+            
+            leaderboard_results.append({
+                "User": friend,
+                "Total": total_score,
+                "HTML": roster_html
+            })
 
-run()
+        df = pd.DataFrame(leaderboard_results).sort_values(by="Total")
+
+        # Display Top 3 Podium
+        cols = st.columns(3)
+        for i, (_, row) in enumerate(df.head(3).iterrows()):
+            with cols[i]:
+                disp = "E" if row['Total'] == 0 else f"{'+' if row['Total'] > 0 else ''}{row['Total']}"
+                st.markdown(f"""
+                    <div class="podium-card">
+                        <div class="user-name">#{i+1} {row['User']}</div>
+                        <div class="podium-score">{disp}</div>
+                        {row['HTML']}
+                    </div>
+                """, unsafe_allow_html=True)
+
+        st.markdown("### FULL STANDINGS")
+        display_df = df[["User", "Total"]].copy()
+        display_df["Total"] = display_df["Total"].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
+        st.table(display_df.set_index("User"))
+    else:
+        st.error("Could not fetch leaderboard data.")
+
+run_app()
 st.caption(f"Last Sync: {datetime.now().strftime('%H:%M:%S')}")
