@@ -285,25 +285,24 @@ def main():
                 st.markdown(f'<div class="podium-card"><div class="user-name">#{r["Rank"]} {r["User"]}</div><div class="podium-score">{disp}</div>{r["HTML"]}</div>', unsafe_allow_html=True)
 
         # 2. DERBY STANDINGS (Cleaned Table)
-        st.markdown("### DERBY STANDINGS")
+            st.markdown("### STANDINGS")
         
-        # Create a list for the expanded table
         expanded_results = []
-        for res in results:
-            # res['HTML'] contains the player names and scores for the cards
-            # We will extract just the names/scores for the table rows
+        # CHANGE: We now use 'df.iterrows()' to get the data that includes the Rank
+        for _, res in df.iterrows():
             row = {
                 "Rank": res["Rank"],
                 "User": res["User"],
                 "Total": f"+{res['Total']}" if res['Total'] > 0 else ("E" if res['Total'] == 0 else res['Total'])
             }
             
-            # Add columns for each player in the roster
+            # Get the roster for this user
             roster = TEAMS.get(res["User"], [])
             for i, p_name in enumerate(roster):
                 p_key = p_name.lower()
                 if p_key in player_map:
-                    s_val = player_map[p_key]['score']
+                    p_data = player_map[p_key]
+                    s_val = p_data['score']
                     s_text = "E" if s_val == 0 else f"{'+' if s_val > 0 else ''}{s_val}"
                 else:
                     s_text = "-"
