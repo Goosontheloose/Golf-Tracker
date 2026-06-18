@@ -70,7 +70,7 @@ Christiaan Daniels 2	Scottie Scheffler	Sam Burns	Wyndham Clark
 Corne van Wyk 1	Rory McIlroy	Tommy Fleetwood	Shane Lowry
 Corne van Wyk 2	Scottie Scheffler	Xander Schauffele	Wyndham Clark
 Cornel 1	Scottie Scheffler	Tommy Fleetwood	Bryson DeChambeau
-Cornel 2	Rory McIlroy	John Rahm	Joaquin Niemann
+Cornel 2	Rory McIlroy	Jon Rahm	Joaquin Niemann
 Dean	Matt Fitzpatrick	Rory McIlroy	Shane Lowry
 Dean Steinhobel (Entry 1)	Justin Rose	Xander Schauffele	Wyndham Clark
 Dean Steinhobel (Entry 2)	Scottie Scheffler	Jon Rahm	Joaquin Niemann
@@ -149,7 +149,7 @@ Michael (Entry 2)	Scottie Scheffler	Cameron Young	Wyndham Clark
 Morne Howell (Entry 1)	Rory McIlroy	Scottie Scheffler	Brooks Koepka
 Morne Howell (Entry 2)	Tommy Fleetwood	Scottie Scheffler	Bryson DeChambeau
 Nico Noeth	Rory McIlroy	Patrick Reed	Ryan Fox
-Owen Rynners 1	Tyrrell Hatton	John Rahm	Bryson DeChambeau
+Owen Rynners 1	Tyrrell Hatton	Jon Rahm	Bryson DeChambeau
 Owen Rynners 3	Scottie Scheffler	Tommy Fleetwood	Shane Lowry
 Owen Rynners 2	Rory McIlroy	Russell Henley	Corey Conners
 Peet 1	Scottie Scheffler	Rory McIlroy	Patrick Reed
@@ -195,7 +195,8 @@ ZT Project (Entry 6)	Xander Schauffele	Patrick Reed	Cameron Smith
 ZT Project (Entry 7)	Patrick Reed	Matt Fitzpatrick	Shane Lowry
 ZT Project (Entry 8)	Jon Rahm	Justin Rose	Corey Conners
 ZT Project (Entry 9)	Matt Fitzpatrick	Xander Schauffele	J.T. Poston
-Frederik	Rory McIlroy	Bryson DeChambeau	Scottie Scheffle
+Frederik	Rory McIlroy	Bryson DeChambeau	Scottie Scheffler
+
 """
 def get_teams(raw_text):
     teams_dict = {}
@@ -284,11 +285,33 @@ def main():
                 st.markdown(f'<div class="podium-card"><div class="user-name">#{r["Rank"]} {r["User"]}</div><div class="podium-score">{disp}</div>{r["HTML"]}</div>', unsafe_allow_html=True)
 
         # 2. DERBY STANDINGS (Cleaned Table)
-        st.markdown("### REST OF THE FIELD")
-        standings_df = df[["Rank", "User", "Total"]].copy()
-        standings_df["Total"] = standings_df["Total"].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
+               st.markdown("### DERBY STANDINGS")
         
-        # Using st.dataframe with hide_index for a perfectly clean table
+        # Create a list for the expanded table
+        expanded_results = []
+        for res in results:
+            # res['HTML'] contains the player names and scores for the cards
+            # We will extract just the names/scores for the table rows
+            row = {
+                "Rank": res["Rank"],
+                "User": res["User"],
+                "Total": f"+{res['Total']}" if res['Total'] > 0 else ("E" if res['Total'] == 0 else res['Total'])
+            }
+            
+            # Add columns for each player in the roster
+            roster = TEAMS.get(res["User"], [])
+            for i, p_name in enumerate(roster):
+                p_key = p_name.lower()
+                if p_key in player_map:
+                    s_val = player_map[p_key]['score']
+                    s_text = "E" if s_val == 0 else f"{'+' if s_val > 0 else ''}{s_val}"
+                else:
+                    s_text = "-"
+                row[f"Player {i+1}"] = f"{p_name} ({s_text})"
+            
+            expanded_results.append(row)
+
+        standings_df = pd.DataFrame(expanded_results)
         st.dataframe(standings_df, hide_index=True, use_container_width=True)
 
         # 3. MASTER FIELD LEADERBOARD
