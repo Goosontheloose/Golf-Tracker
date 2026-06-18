@@ -256,7 +256,7 @@ def parse_score(val):
     try: return int(str(val).replace("+", ""))
     except: return 0
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=900)
 def get_data():
     url = "https://live-golf-data.p.rapidapi.com/leaderboard"
     params = {"orgId":"1", "tournId":"026", "year":"2026"}
