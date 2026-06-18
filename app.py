@@ -28,7 +28,10 @@ st.markdown("""
     .s-bar-bg { background: #eee; height: 12px; border: 1px solid #064E3B; width: 100%; }
     .s-bar-fill { background: #064E3B; height: 100%; }
 
-    [data-testid="stTable"] { background-color: white !important; border: 2px solid #064E3B !important; width: 100%; }
+    /* Force Table Text Color */
+    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
+        color: #064E3B !important;
+    }
 
     @media (max-width: 768px) {
         [data-testid="column"] { width: 100% !important; flex: 1 1 100% !important; min-width: 100% !important; }
@@ -75,7 +78,12 @@ def main():
             score = parse_score(r.get('total', '0'))
             thru = r.get('thru', 'F')
             player_map[name.lower()] = {"score": score, "thru": thru}
-            pro_field.append({"Pos": r.get('position', '-'), "Player": name, "Score": "E" if score == 0 else f"{'+' if score > 0 else ''}{score}", "Thru": thru})
+            pro_field.append({
+                "Pos": r.get('position', '-'), 
+                "Player": name, 
+                "Score": "E" if score == 0 else f"{'+' if score > 0 else ''}{score}", 
+                "Thru": thru
+            })
 
         results = []
         for user, roster in TEAMS.items():
@@ -90,7 +98,6 @@ def main():
             results.append({"User": user, "Total": total, "HTML": html})
 
         df = pd.DataFrame(results).sort_values("Total")
-        # Explicitly set the Rank column based on the sorted order
         df.insert(0, 'Rank', range(1, len(df) + 1))
 
         # 1. CHAMPIONSHIP FLIGHT (TOP 5)
@@ -101,18 +108,19 @@ def main():
                 disp = "E" if r['Total'] == 0 else f"{'+' if r['Total'] > 0 else ''}{r['Total']}"
                 st.markdown(f'<div class="podium-card"><div class="user-name">#{r["Rank"]} {r["User"]}</div><div class="podium-score">{disp}</div>{r["HTML"]}</div>', unsafe_allow_html=True)
 
-        # 2. DERBY STANDINGS (Table with Explicit Rank column)
+        # 2. DERBY STANDINGS (Cleaned Table)
         st.markdown("### DERBY STANDINGS")
         standings_df = df[["Rank", "User", "Total"]].copy()
         standings_df["Total"] = standings_df["Total"].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
-        # Hide the default dataframe index to only show our Rank column
-        st.table(standings_df.assign(hack='').set_index('hack'))
+        
+        # Using st.dataframe with hide_index for a perfectly clean table
+        st.dataframe(standings_df, hide_index=True, use_container_width=True)
 
         # 3. MASTER FIELD LEADERBOARD
         st.markdown("### ⛳ MASTER FIELD LEADERBOARD")
         st.dataframe(pd.DataFrame(pro_field).set_index("Pos"), use_container_width=True)
 
-        # 4. MARKET SENTIMENT
+        # 4. MARKET SENTIMENT (Bottom Section)
         st.markdown("### 📊 MARKET SENTIMENT")
         counts = pd.Series(all_picks).value_counts()
         m_val = counts.max()
