@@ -3,9 +3,10 @@ import requests
 import pandas as pd
 from datetime import datetime
 
-# --- 1. SETTINGS & VISIBILITY FIXES ---
+# --- 1. SETTINGS & BRANDING ---
 st.set_page_config(page_title="The Syndicate Derby", layout="wide")
 
+# Championship Brutalism CSS
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@900&display=swap');
@@ -17,7 +18,7 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
 
-    /* Podium Card Styling */
+    /* Team Cards */
     .podium-card { 
         padding: 1.2rem; 
         border: 4px solid #064E3B; 
@@ -52,41 +53,42 @@ st.markdown("""
         color: #333 !important;
     }
 
-    /* MARKET SENTIMENT CUSTOM STYLING */
+    /* Market Sentiment Graphic */
     .sentiment-container {
         background: white;
         border: 4px solid #064E3B;
-        padding: 20px;
+        padding: 24px;
         box-shadow: 8px 8px 0px #EAB308;
-        margin-bottom: 30px;
+        margin: 20px 0;
     }
-    .sentiment-row {
-        margin-bottom: 15px;
-    }
+    .sentiment-row { margin-bottom: 18px; }
     .sentiment-label {
         font-weight: 900;
         text-transform: uppercase;
-        font-size: 0.85rem;
+        font-size: 0.9rem;
         display: flex;
         justify-content: space-between;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
+        color: #064E3B;
     }
     .bar-bg {
-        background: #eee;
-        height: 12px;
+        background: #F1F1F1;
+        height: 14px;
         border: 1px solid #064E3B;
+        position: relative;
     }
     .bar-fill {
         background: #064E3B;
         height: 100%;
+        transition: width 0.5s ease-in-out;
     }
 
+    /* Table Fixes */
     [data-testid="stTable"] {
         background-color: white !important;
         border: 2px solid #064E3B !important;
     }
 
-    /* MOBILE: Force vertical stack */
     @media (max-width: 768px) {
         [data-testid="column"] {
             width: 100% !important;
@@ -97,7 +99,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DATA INPUT ---
+# --- 2. DATA CONFIG ---
 TEAMS = {
     "Martin": ["Bryson DeChambeau", "Scottie Scheffler", "Rory McIlroy"],
     "Wynand": ["Patrick Cantlay", "Xander Schauffele", "Ludvig Aberg"],
@@ -128,7 +130,7 @@ def get_leaderboard_data():
     except:
         return []
 
-# --- 3. MAIN APP ---
+# --- 3. BUILD APP ---
 def run_app():
     st.markdown("<h1>🏆 THE SYNDICATE DERBY</h1>", unsafe_allow_html=True)
     
@@ -146,6 +148,7 @@ def run_app():
             raw_score = row.get('total', '0')
             p_score = parse_score(raw_score)
             p_thru = row.get('thru', 'F')
+            
             player_scores[full_name.lower()] = {"score": p_score, "thru": p_thru}
             
             all_pro_list.append({
@@ -155,6 +158,7 @@ def run_app():
                 "Thru": p_thru
             })
 
+        # Process Teams
         leaderboard_results = []
         for friend, roster in TEAMS.items():
             total_score = 0
@@ -172,7 +176,7 @@ def run_app():
         df = pd.DataFrame(leaderboard_results).sort_values(by="Total")
         df['Rank'] = range(1, len(df) + 1)
 
-        # --- CHAMPIONSHIP FLIGHT (TOP 5) ---
+        # --- SECTION A: TOP 5 ---
         st.markdown("### CHAMPIONSHIP FLIGHT")
         cols = st.columns(5)
         for i, (_, row) in enumerate(df.head(5).iterrows()):
@@ -186,34 +190,45 @@ def run_app():
                     </div>
                 """, unsafe_allow_html=True)
 
-        # --- MARKET SENTIMENT (UPGRADED) ---
+        # --- SECTION B: MARKET SENTIMENT ---
         st.markdown("### 📊 MARKET SENTIMENT")
         sentiment = pd.Series(all_picks).value_counts()
         max_picks = sentiment.max()
         
+        # Build HTML string carefully
         sentiment_html = '<div class="sentiment-container">'
         for player, count in sentiment.items():
-            width = (count / max_picks) * 100
-            sentiment_html += f"""
-                <div class="sentiment-row">
-                    <div class="sentiment-label"><span>{player}</span><span>{count} PICKS</span></div>
-                    <div class="bar-bg"><div class="bar-fill" style="width: {width}%;"></div></div>
+            width = int((count / max_picks) * 100)
+            row = f"""
+            <div class="sentiment-row">
+                <div class="sentiment-label">
+                    <span>{player}</span>
+                    <span>{count} {'PICK' if count == 1 else 'PICKS'}</span>
                 </div>
+                <div class="bar-bg">
+                    <div class="bar-fill" style="width: {width}%;"></div>
+                </div>
+            </div>
             """
+            sentiment_html += row
         sentiment_html += '</div>'
+        
+        # RENDER AS HTML
         st.markdown(sentiment_html, unsafe_allow_html=True)
 
-        # --- STANDINGS & MASTER FIELD ---
+        # --- SECTION C: FULL STANDINGS ---
         st.markdown("### DERBY STANDINGS")
         display_df = df[["Rank", "User", "Total"]].copy()
         display_df["Total"] = display_df["Total"].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
         st.table(display_df.set_index("Rank"))
 
+        # --- SECTION D: PRO FIELD ---
         st.markdown("### ⛳ MASTER FIELD LEADERBOARD")
         st.dataframe(pd.DataFrame(all_pro_list).set_index("Pos"), use_container_width=True)
 
     else:
         st.error("Connecting to live tournament data...")
 
-run_app()
-st.caption(f"Last Sync: {datetime.now().strftime('%H:%M:%S')}")
+if __name__ == "__main__":
+    run_app()
+    st.caption(f"Last Sync: {datetime.now().strftime('%H:%M:%S')}")
