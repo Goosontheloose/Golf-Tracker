@@ -42,7 +42,7 @@ st.markdown("""
 # --- 2. DATA ---
 TEAMS = {
     "Martin": ["Bryson DeChambeau", "Scottie Scheffler", "Rory McIlroy"],
-    "Wynand": ["Patrick Cantlay", "Xander Schauffele", "Ludvig Äberg"],
+    "Wynand": ["Patrick Cantlay", "Xander Schauffele", "Ludvig Åberg"],
     "Rupert": ["Collin Morikawa", "Hideki Matsuyama", "Brooks Koepka"],
     "Frederik": ["Jordan Spieth", "Viktor Hovland", "Tommy Fleetwood"],
     "Gustav": ["Jon Rahm", "Tyrrell Hatton", "Cameron Smith"]
