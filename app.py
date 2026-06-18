@@ -78,14 +78,14 @@ Dean Steinhobel (Entry 3)	Justin Thomas	Dustin Johnson	Shane Lowry
 Dean Steinhobel (Entry 4)	Jon Rahm	Jordan Spieth	Cameron Smith
 Deon 1	Scottie Scheffler	Rory McIlroy	Patrick Cantlay
 Deon 2	Scottie Scheffler	Xander Schauffele	Bryson DeChambeau
-Deon 3	Rory McIlroy	Tyrrell Hatton	Wyndham Clark
+Amanda 1	Rory McIlroy	Tyrrell Hatton	Wyndham Clark
 Deon Lappa	Shane Lowry	Justin Rose	Scottie Scheffler
 Derick Kunz	Scottie Scheffler	Ben Kohles	Rory McIlroy
 Derik (Entry 1)	Patrick Reed	Cameron Smith	Sam Burns
 Derik (Entry 2)	Scottie Scheffler	Rory McIlroy	Bryson DeChambeau
 Derik (Entry 3)	Scottie Scheffler	Matt Fitzpatrick	Justin Rose
-Deon 4	Scottie Scheffler	Cameron Young	Bryson DeChambeau
-Donald (Entry 1)	Scottie Scheffler	Tyrrell Hatton	Adena Schaper
+Amanda 2	Scottie Scheffler	Cameron Young	Bryson DeChambeau
+Donald (Entry 1)	Scottie Scheffler	Tyrrell Hatton	Jayden Schaper
 Donald (Entry 2)	Bryson DeChambeau	Ludvig Åberg	Tommy Fleetwood
 Donald (Entry 3)	Chris Kirk	Viktor Hovland	Xander Schauffele
 DOSSA	Scottie Scheffler	Cameron Young	Brooks Koepka
@@ -100,7 +100,7 @@ Eugene (Entry 1)	Scottie Scheffler	Xander Schauffele	Brooks Koepka
 Eugene (Entry 2)	Rory McIlroy	Jon Rahm	Bryson DeChambeau
 Eugene (Entry 3)	Cameron Young	Collin Morikawa	Wyndham Clark
 Eugene (Entry 4)	Tommy Fleetwood	Ludvig Åberg	Joaquin Niemann
-Eugene (Entry 5)	Justin Rose	Schaper	Du Plessis
+Eugene (Entry 5)	Justin Rose	Jayden Schaper	Du Plessis
 Francois	Rory McIlroy	Tommy Fleetwood	Cameron Smith
 Fred Bezuidenhout (Span 1)	Cameron Young	Matt Fitzpatrick	Max Greyserman
 Fred Bezuidenhout (Span 2)	Tommy Fleetwood	Jon Rahm	Jake Knapp
@@ -157,7 +157,7 @@ Peet 2	Scottie Scheffler	Rory McIlroy	Brooks Koepka
 Pierre Rynners (Entry 1)	Scottie Scheffler	Xander Schauffele	Brian Harman
 Pierre Rynners (Entry 2)	Justin Rose	Sam Burns	Jason Day
 Pieter Rossouw	Tommy Fleetwood	Bryson DeChambeau	Sam Burns
-Ralf Grotsch (Entry 4)	JJ Spaun	Sam Burns	Scottie Scheffler
+Ralf Grotsch (Entry 4)	J.J. Spaun	Sam Burns	Scottie Scheffler
 Ralf Grötsch (Entry 1)	Brooks Koepka	Tommy Fleetwood	Tyrrell Hatton
 Ralf Grötsch (Entry 2)	Scottie Scheffler	Xander Schauffele	Jon Rahm
 Ralf Grötsch (Entry 3)	Cameron Young	Bud Cauley	Rory McIlroy
@@ -165,7 +165,7 @@ Ranon Fouche	Scottie Scheffler	Xander Schauffele	Bryson DeChambeau
 Reinhardt Uys	Tommy Fleetwood	Brooks Koepka	Jake Knapp
 Reon Cronje	Scottie Scheffler	Justin Rose	Nicolai Højgaard
 Rikus Hattingh	Matt Fitzpatrick	Tommy Fleetwood	Gary Woodland
-Robert	Scottie Scheffler	John Michael Spaun	Rory McIlroy
+Robert	Scottie Scheffler	J.J. Spaun	Rory McIlroy
 Robert 2	Scottie Scheffler	Jon Rahm	Joaquin Niemann
 Robert 3	Scottie Scheffler	Tyrrell Hatton	Patrick Cantlay
 Rowan (Entry 1)	Scottie Scheffler	Russell Henley	Shane Lowry
@@ -195,7 +195,7 @@ ZT Project (Entry 6)	Xander Schauffele	Patrick Reed	Cameron Smith
 ZT Project (Entry 7)	Patrick Reed	Matt Fitzpatrick	Shane Lowry
 ZT Project (Entry 8)	Jon Rahm	Justin Rose	Corey Conners
 ZT Project (Entry 9)	Matt Fitzpatrick	Xander Schauffele	J.T. Poston
-
+Frederik	Rory McIlroy	Bryson DeChambeau	Scottie Scheffle
 """
 def get_teams(raw_text):
     teams_dict = {}
