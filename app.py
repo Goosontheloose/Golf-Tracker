@@ -10,21 +10,18 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@900&display=swap');
     
-    /* Force Background and Text Colors for Visibility */
     .stApp { background-color: #F5F5F4 !important; }
     
-    /* Force ALL text outside cards to be Dark Green (Fixes the 'invisible' table) */
     h1, h2, h3, p, span, th, td, .stMarkdown { 
         color: #064E3B !important; 
         font-family: 'Inter', sans-serif;
     }
 
-    /* Podium Card Styling */
     .podium-card { 
         padding: 1.2rem; 
         border: 4px solid #064E3B; 
         background-color: white !important; 
-        box-shadow: 8px 8px 0px #064E3B; 
+        box-shadow: 6px 6px 0px #064E3B; 
         margin-bottom: 20px;
         display: flex;
         flex-direction: column;
@@ -33,7 +30,7 @@ st.markdown("""
     .podium-score { 
         font-weight: 900; 
         color: #064E3B !important; 
-        font-size: clamp(2.5rem, 12vw, 4rem); 
+        font-size: clamp(2rem, 10vw, 3rem); 
         line-height: 1; 
         margin: 5px 0; 
     }
@@ -42,19 +39,18 @@ st.markdown("""
         text-transform: uppercase; 
         font-weight: 900; 
         color: #064E3B !important; 
-        font-size: 1.1rem; 
+        font-size: 1rem; 
     }
 
     .player-row { 
-        font-size: 0.9rem; 
+        font-size: 0.85rem; 
         display: flex; 
         justify-content: space-between; 
         border-bottom: 1px solid #eee; 
-        padding: 8px 0; 
-        color: #333 !important; /* Specific dark color for player names */
+        padding: 6px 0; 
+        color: #333 !important;
     }
 
-    /* Table Specific Styling to ensure visibility */
     [data-testid="stTable"] {
         background-color: white !important;
         border: 2px solid #064E3B !important;
@@ -71,12 +67,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DATA (Using your working 'total' logic) ---
+# --- 2. DATA INPUT ---
 TEAMS = {
     "Martin": ["Bryson DeChambeau", "Scottie Scheffler", "Rory McIlroy"],
     "Wynand": ["Patrick Cantlay", "Xander Schauffele", "Ludvig Aberg"],
     "Rupert": ["Collin Morikawa", "Hideki Matsuyama", "Brooks Koepka"],
-    "Frederik": ["Jordan Spieth", "Viktor Hovland", "Tommy Fleetwood"]
+    "Frederik": ["Jordan Spieth", "Viktor Hovland", "Tommy Fleetwood"],
+    "Gustav": ["Jon Rahm", "Tyrrell Hatton", "Cameron Smith"]
 }
 
 def parse_score(val):
@@ -108,17 +105,28 @@ def run_app():
     rows = get_leaderboard_data()
     
     if rows:
-        # Create Player Map
         player_scores = {}
+        all_pro_list = []
+        all_picks = []
+
+        # Create Player Map and Master Leaderboard Data
         for row in rows:
             fname = row.get('firstName', '').strip()
             lname = row.get('lastName', '').strip()
-            full_name = f"{fname} {lname}".lower()
-            raw_score = row.get('total', '0') 
-            player_scores[full_name] = {
-                "score": parse_score(raw_score),
-                "thru": row.get('thru', 'F')
-            }
+            full_name = f"{fname} {lname}".strip()
+            raw_score = row.get('total', '0')
+            
+            p_score = parse_score(raw_score)
+            p_thru = row.get('thru', 'F')
+            
+            player_scores[full_name.lower()] = {"score": p_score, "thru": p_thru}
+            
+            all_pro_list.append({
+                "Pos": row.get('position', '-'),
+                "Player": full_name,
+                "Score": "E" if p_score == 0 else f"{'+' if p_score > 0 else ''}{p_score}",
+                "Thru": p_thru
+            })
 
         # Calculate Team Totals
         leaderboard_results = []
@@ -126,6 +134,7 @@ def run_app():
             total_score = 0
             roster_html = ""
             for p_name in roster:
+                all_picks.append(p_name)
                 p_data = player_scores.get(p_name.lower().strip(), {"score": 0, "thru": "N/A"})
                 p_score = p_data["score"]
                 total_score += p_score
@@ -135,28 +144,41 @@ def run_app():
             leaderboard_results.append({"User": friend, "Total": total_score, "HTML": roster_html})
 
         df = pd.DataFrame(leaderboard_results).sort_values(by="Total")
+        df['Rank'] = range(1, len(df) + 1)
 
-        # Display Top 3 Podium
-        cols = st.columns(3)
-        for i, (_, row) in enumerate(df.head(3).iterrows()):
+        # --- A. TOP 5 COLUMNS ---
+        st.markdown("### CHAMPIONSHIP FLIGHT")
+        cols = st.columns(5)
+        for i, (_, row) in enumerate(df.head(5).iterrows()):
             with cols[i]:
                 disp = "E" if row['Total'] == 0 else f"{'+' if row['Total'] > 0 else ''}{row['Total']}"
                 st.markdown(f"""
                     <div class="podium-card">
-                        <div class="user-name">#{i+1} {row['User']}</div>
+                        <div class="user-name">#{row['Rank']} {row['User']}</div>
                         <div class="podium-score">{disp}</div>
                         {row['HTML']}
                     </div>
                 """, unsafe_allow_html=True)
 
-        # Full Leaderboard Section
-        st.markdown("<h3>FULL STANDINGS</h3>", unsafe_allow_html=True)
-        # Format the Score column for the table
-        display_df = df[["User", "Total"]].copy()
+        # --- B. FULL STANDINGS TABLE ---
+        st.markdown("### DERBY STANDINGS")
+        display_df = df[["Rank", "User", "Total"]].copy()
         display_df["Total"] = display_df["Total"].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
-        st.table(display_df.set_index("User"))
+        st.table(display_df.set_index("Rank"))
+
+        # --- C. MARKET SENTIMENT ---
+        st.markdown("### 📊 MARKET SENTIMENT")
+        sentiment = pd.Series(all_picks).value_counts().reset_index()
+        sentiment.columns = ['Player', 'Selection Count']
+        st.bar_chart(sentiment.set_index('Player'))
+
+        # --- D. REAL TOURNAMENT LEADERBOARD ---
+        st.markdown("### ⛳ MASTER FIELD LEADERBOARD")
+        pro_df = pd.DataFrame(all_pro_list)
+        st.dataframe(pro_df.set_index("Pos"), use_container_width=True)
+
     else:
-        st.error("Connecting to API...")
+        st.error("Connecting to live tournament data...")
 
 run_app()
 st.caption(f"Last Sync: {datetime.now().strftime('%H:%M:%S')}")
