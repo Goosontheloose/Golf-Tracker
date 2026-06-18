@@ -6,7 +6,7 @@ from datetime import datetime
 # --- APP CONFIG ---
 st.set_page_config(page_title="The Syndicate Derby", layout="wide")
 
-# Secure API Key
+# Secure API Key - exactly as you requested
 try:
     API_KEY = st.secrets["api_key"]
 except KeyError:
@@ -46,17 +46,15 @@ Frederik	Jordan Spieth	Viktor Hovland	Tommy Fleetwood
 """
 
 # --- DATA ENGINE ---
-@st.cache_data(ttl=300) # Reduced to 5 mins
+@st.cache_data(ttl=300)
 def get_live_data():
     url = "https://live-golf-data.p.rapidapi.com/leaderboard"
-    # Using 2024 for testing as it has confirmed data
     params = {"orgId":"1", "tournId":"026", "year":"2024"}
     headers = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
     try:
         r = requests.get(url, headers=headers, params=params)
         return r.json().get('leaderboardRows', [])
-    except Exception as e:
-        st.error(f"API Error: {e}")
+    except:
         return []
 
 def process_standings():
@@ -67,20 +65,20 @@ def process_standings():
     # 1. Build a robust Pro Lookup Map
     pro_map = {}
     for p in api_rows:
-        # Check all possible name fields
         fname = p.get('firstName', '')
         lname = p.get('lastName', '')
         full_name = f"{fname} {lname}".strip().lower()
-        if not full_name:
-            full_name = p.get('name', '').strip().lower()
         
-        # Check all possible score fields
-        score = p.get('toParValue')
-        if score is None: score = p.get('toPar')
-        if score is None: score = p.get('total', 0) # Fallback to 0 if still nothing
-        
+        # SCORE SAFETY: Force score to be an integer
+        raw_score = p.get('toParValue')
+        try:
+            # If it's a number, use it. If it's "E" or None, make it 0.
+            clean_score = int(raw_score) if raw_score is not None else 0
+        except (ValueError, TypeError):
+            clean_score = 0
+            
         pro_map[full_name] = {
-            "score": score,
+            "score": clean_score,
             "thru": p.get('thru', 'F')
         }
     
@@ -88,7 +86,6 @@ def process_standings():
     results = []
     all_picks = []
     for line in RAW_EXCEL_DATA.strip().split('\n'):
-        # Robust splitting for tabs or spaces
         parts = [p.strip() for p in line.split('\t') if p.strip()]
         if not parts: continue
         
@@ -99,10 +96,12 @@ def process_standings():
         u_total = 0
         u_details = []
         for pick in picks:
-            # Match names flexibly
             data = pro_map.get(pick.lower(), {"score": 0, "thru": "-"})
             s = data['score']
+            
+            # MATH SAFETY: Ensure u_total stays a number
             u_total += s
+            
             txt_score = "E" if s == 0 else f"{'+' if s > 0 else ''}{s}"
             u_details.append(f"{pick} {txt_score} [{data['thru']}]")
             
@@ -134,12 +133,10 @@ if df is not None and not df.empty:
     tab1, tab2 = st.tabs(["📊 FULL STANDINGS", "🎯 MARKET SENTIMENT"])
     
     with tab1:
-        # Full field list
-        for _, row in df.iterrows():
-            disp = "E" if row['Total'] == 0 else f"{'+' if row['Total'] > 0 else ''}{row['Total']}"
-            st.markdown(f"**{row['User']}**: {disp}")
-            st.caption(", ".join(row['Picks']))
-            st.divider()
+        # Restored simple leaderboard table
+        display_df = df[["User", "Total"]].copy()
+        display_df["Total"] = display_df["Total"].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
+        st.table(display_df)
 
     with tab2:
         st.markdown("### MOST PICKED PLAYERS")
@@ -149,15 +146,14 @@ if df is not None and not df.empty:
             st.bar_chart(data=counts, x='Player', y='Selections', color="#064E3B")
 
 else:
-    st.warning("Data is currently loading or the API key is being rate-limited. Please wait 10 seconds and refresh.")
+    st.warning("Data is loading. If scores stay 0, check the 'Engine Room' below.")
 
-# --- THE ENGINE ROOM (DEBUGGER) ---
+# --- ENGINE ROOM (DEBUGGER) ---
 with st.expander("🛠️ DEBUG: ENGINE ROOM"):
-    st.write("If scores are 0, check if the names below match your Excel data exactly:")
     if raw_api:
-        debug_df = pd.DataFrame(raw_api)[['firstName', 'lastName', 'toParValue', 'thru']].head(10)
-        st.write(debug_df)
+        st.write("First 5 Pros from API:")
+        st.write(pd.DataFrame(raw_api)[['firstName', 'lastName', 'toParValue', 'thru']].head())
     else:
-        st.write("No API data received.")
+        st.write("No connection to API.")
 
 st.caption(f"Refreshed: {datetime.now().strftime('%H:%M:%S')}")
