@@ -41,9 +41,9 @@ st.markdown("""
 
 # --- 2. DATA ---
 TEAMS = {
-    "Martin": ["Bryson DeChambeau", "Scottie Scheffler", "Rory McIlroy"],
-    "Wynand": ["Patrick Cantlay", "Xander Schauffele", "Ludvig Åberg"],
-    "Rupert": ["Collin Morikawa", "Hideki Matsuyama", "Brooks Koepka"],
+    "Martin": ["Jayden Schaper", "Scottie Scheffler", "Rory McIlroy"],
+    "Wynand": ["Carl Yuan", "Xander Schauffele", "Ludvig Åberg"],
+    "Rupert": ["Collin Morikawa", "Sam Burns", "Brooks Koepka"],
     "Frederik": ["Jordan Spieth", "Viktor Hovland", "Tommy Fleetwood"],
     "Gustav": ["Jon Rahm", "Tyrrell Hatton", "Cameron Smith"],
     "Martin 2": ["Bryson DeChambeau", "Cameron Smith", "Rory McIlroy"],
@@ -61,7 +61,7 @@ def parse_score(val):
 @st.cache_data(ttl=600)
 def get_data():
     url = "https://live-golf-data.p.rapidapi.com/leaderboard"
-    params = {"orgId":"1", "tournId":"026", "year":"2024"}
+    params = {"orgId":"1", "tournId":"026", "year":"2026"}
     headers = {"X-RapidAPI-Key": st.secrets["api_key"], "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
     try:
         r = requests.get(url, headers=headers, params=params)
