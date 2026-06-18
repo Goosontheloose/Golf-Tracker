@@ -234,36 +234,7 @@ def main():
     rows = get_data()
     
     if rows:
-        # --- ANALYTICS (HIVE MIND) ---
-        st.markdown("### 📊 THE HIVE MIND (COMBINATIONS)")
-        col_a, col_b = st.columns(2)
-
-        # 1. Exact Triplets
-        triplet_counts = Counter([tuple(sorted(players)) for players in TEAMS.values()])
-        exact_triplets = {k: v for k, v in triplet_counts.items() if v > 1}
-
-        # 2. Common Duos
-        all_duos = []
-        for players in TEAMS.values():
-            all_duos.extend(combinations(sorted(players), 2))
-        duo_counts = Counter(all_duos).most_common(5)
-
-        with col_a:
-            st.write("**Exact Same Team (3/3)**")
-            if exact_triplets:
-                for players, count in exact_triplets.items():
-                    st.info(f"{count} people picked: {', '.join(players)}")
-            else:
-                st.write("Every team is unique!")
-
-        with col_b:
-            st.write("**Most Common Pairings (2/3)**")
-            for duo, count in duo_counts:
-                st.success(f"{count} people paired: {duo[0]} + {duo[1]}")
-
-        st.markdown("---")
-
-        # --- LEADERBOARD LOGIC ---
+        # --- 1. PROCESS GLOBAL DATA ---
         player_map = {}
         pro_field = []
         all_picks = []
@@ -303,7 +274,7 @@ def main():
         df = pd.DataFrame(results).sort_values("Total")
         df.insert(0, 'Rank', range(1, len(df) + 1))
 
-        # --- UI DISPLAY ---
+        # --- 2. DISPLAY TOP 5 ---
         st.markdown("### TOP 5 LEADERS")
         cols = st.columns(5)
         for i, (_, r) in enumerate(df.head(5).iterrows()):
@@ -311,6 +282,7 @@ def main():
                 disp = "E" if r['Total'] == 0 else f"{'+' if r['Total'] > 0 else ''}{r['Total']}"
                 st.markdown(f'<div class="podium-card"><div class="user-name">#{r["Rank"]} {r["User"]}</div><div class="podium-score">{disp}</div>{r["HTML"]}</div>', unsafe_allow_html=True)
 
+        # --- 3. DISPLAY STANDINGS ---
         st.markdown("### STANDINGS")
         expanded_results = []
         for _, res in df.iterrows():
@@ -327,9 +299,11 @@ def main():
 
         st.dataframe(pd.DataFrame(expanded_results), hide_index=True, use_container_width=True)
 
+        # --- 4. DISPLAY PRO LEADERBOARD ---
         st.markdown("### ⛳ US OPEN LIVE LEADERBOARD")
         st.dataframe(pd.DataFrame(pro_field).set_index("Pos"), use_container_width=True)
 
+        # --- 5. MARKET SENTIMENT ---
         st.markdown("### 📊 WHO DID MOST PEOPLE BET ON?")
         counts = pd.Series(all_picks).value_counts()
         m_val = counts.max()
@@ -339,6 +313,34 @@ def main():
             s_html += f'<div class="s-row"><div class="s-label"><span>{name}</span><span>{count} PICKS</span></div><div class="s-bar-bg"><div class="s-bar-fill" style="width:{w}%;"></div></div></div>'
         s_html += '</div>'
         st.write(s_html, unsafe_allow_html=True)
+
+        # --- 6. THE HIVE MIND (MOVED TO BOTTOM) ---
+        st.markdown("---")
+        st.markdown("### 📊 THE HIVE MIND (COMBINATIONS)")
+        col_a, col_b = st.columns(2)
+
+        # Triplets logic
+        triplet_counts = Counter([tuple(sorted(players)) for players in TEAMS.values()])
+        exact_triplets = {k: v for k, v in triplet_counts.items() if v > 1}
+
+        # Duos logic
+        all_duos = []
+        for players in TEAMS.values():
+            all_duos.extend(combinations(sorted(players), 2))
+        duo_counts = Counter(all_duos).most_common(5)
+
+        with col_a:
+            st.write("**Exact Same Team (3/3)**")
+            if exact_triplets:
+                for players, count in exact_triplets.items():
+                    st.info(f"**{count} people** picked: {', '.join(players)}")
+            else:
+                st.write("Every team is unique!")
+
+        with col_b:
+            st.write("**Most Common Pairings (2/3)**")
+            for duo, count in duo_counts:
+                st.success(f"**{count} people** paired: {duo[0]} + {duo[1]}")
     else:
         st.error("Waiting for tournament data...")
 
