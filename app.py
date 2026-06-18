@@ -28,7 +28,7 @@ st.markdown("""
     .s-bar-bg { background: #eee; height: 12px; border: 1px solid #064E3B; width: 100%; }
     .s-bar-fill { background: #064E3B; height: 100%; }
 
-    [data-testid="stTable"] { background-color: white !important; border: 2px solid #064E3B !important; }
+    [data-testid="stTable"] { background-color: white !important; border: 2px solid #064E3B !important; width: 100%; }
 
     @media (max-width: 768px) {
         [data-testid="column"] { width: 100% !important; flex: 1 1 100% !important; min-width: 100% !important; }
@@ -92,7 +92,7 @@ def main():
         df = pd.DataFrame(results).sort_values("Total")
         df['Rank'] = range(1, len(df) + 1)
 
-        # TOP 5
+        # 1. CHAMPIONSHIP FLIGHT (TOP 5)
         st.markdown("### CHAMPIONSHIP FLIGHT")
         cols = st.columns(5)
         for i, (_, r) in enumerate(df.head(5).iterrows()):
@@ -100,7 +100,17 @@ def main():
                 disp = "E" if r['Total'] == 0 else f"{'+' if r['Total'] > 0 else ''}{r['Total']}"
                 st.markdown(f'<div class="podium-card"><div class="user-name">#{r["Rank"]} {r["User"]}</div><div class="podium-score">{disp}</div>{r["HTML"]}</div>', unsafe_allow_html=True)
 
-        # MARKET SENTIMENT (Strict Render Fix)
+        # 2. DERBY STANDINGS (Full Table with Rank)
+        st.markdown("### DERBY STANDINGS")
+        standings_df = df[["Rank", "User", "Total"]].copy()
+        standings_df["Total"] = standings_df["Total"].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
+        st.table(standings_df.set_index("Rank"))
+
+        # 3. MASTER FIELD LEADERBOARD
+        st.markdown("### ⛳ MASTER FIELD LEADERBOARD")
+        st.dataframe(pd.DataFrame(pro_field).set_index("Pos"), use_container_width=True)
+
+        # 4. MARKET SENTIMENT (Moved to Bottom)
         st.markdown("### 📊 MARKET SENTIMENT")
         counts = pd.Series(all_picks).value_counts()
         m_val = counts.max()
@@ -112,15 +122,6 @@ def main():
         s_html += '</div>'
         st.write(s_html, unsafe_allow_html=True)
 
-        # STANDINGS
-        st.markdown("### DERBY STANDINGS")
-        standings_df = df[["Rank", "User", "Total"]].copy()
-        standings_df["Total"] = standings_df["Total"].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
-        st.table(standings_df.set_index("Rank"))
-
-        # PRO FIELD
-        st.markdown("### ⛳ MASTER FIELD LEADERBOARD")
-        st.dataframe(pd.DataFrame(pro_field).set_index("Pos"), use_container_width=True)
     else:
         st.error("Waiting for tournament data...")
 
