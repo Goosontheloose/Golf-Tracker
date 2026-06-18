@@ -142,7 +142,8 @@ def run_app():
         for row in rows:
             fname = row.get('firstName', '').strip()
             lname = row.get('lastName', '').strip()
-            ', '0')
+            full_name = f"{fname} {lname}".strip()
+            raw_score = row.get('total', '0')
             p_score = parse_score(raw_score)
             p_thru = row.get('thru', 'F')
             player_scores[full_name.lower()] = {"score": p_score, "thru": p_thru}
@@ -150,7 +151,11 @@ def run_app():
             all_pro_list.append({
                 "Pos": row.get('position', '-'),
                 "Player": full_name,
-                "Score": "E" if p_score == 0 else f"{'+' if p_score > 0 else '' []
+                "Score": "E" if p_score == 0 else f"{'+' if p_score > 0 else ''}{p_score}",
+                "Thru": p_thru
+            })
+
+        leaderboard_results = []
         for friend, roster in TEAMS.items():
             total_score = 0
             roster_html = ""
@@ -159,7 +164,8 @@ def run_app():
                 p_data = player_scores.get(p_name.lower().strip(), {"score": 0, "thru": "N/A"})
                 p_score = p_data["score"]
                 total_score += p_score
-                s_str = "E" if p_score == _html += f'<div class="player-row"><span>{p_name}</span><span><b>{s_str}</b> <small>[{p_data["thru"]}]</small></span></div>'
+                s_str = "E" if p_score == 0 else f"{'+' if p_score > 0 else ''}{p_score}"
+                roster_html += f'<div class="player-row"><span>{p_name}</span><span><b>{s_str}</b> <small>[{p_data["thru"]}]</small></span></div>'
             
             leaderboard_results.append({"User": friend, "Total": total_score, "HTML": roster_html})
 
@@ -171,9 +177,11 @@ def run_app():
         cols = st.columns(5)
         for i, (_, row) in enumerate(df.head(5).iterrows()):
             with cols[i]:
-                disp = "E" if row['Total'] == 0 else f"{f"""
+                disp = "E" if row['Total'] == 0 else f"{'+' if row['Total'] > 0 else ''}{row['Total']}"
+                st.markdown(f"""
                     <div class="podium-card">
-                        <div class="user-name">#{
+                        <div class="user-name">#{row['Rank']} {row['User']}</div>
+                        <div class="podium-score">{disp}</div>
                         {row['HTML']}
                     </div>
                 """, unsafe_allow_html=True)
