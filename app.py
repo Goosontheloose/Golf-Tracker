@@ -39,6 +39,19 @@ def get_data():
     except:
         return []
 
+def parse_score(val):
+    """Robustly converts API score values to integers."""
+    if val is None:
+        return 0
+    s_val = str(val).strip().upper()
+    if s_val in ["E", "EVEN", ""]:
+        return 0
+    try:
+        # Handles "+2", "-6", etc.
+        return int(s_val.replace("+", ""))
+    except ValueError:
+        return 0
+
 # --- 3. LOGIC ---
 def run():
     rows = get_data()
@@ -46,16 +59,16 @@ def run():
     # Map API data to names
     api_map = {}
     for r in rows:
-        name = f"{r.get('firstName','')} {r.get('lastName','')}".strip().lower()
-        # FIX: The API uses 'totalToPar' for the relative score (e.g., -6)
-        score_val = r.get('totalToPar') 
+        # Create full name key
+        fname = r.get('firstName', '')
         
-        # If 'totalToPar' is missing, fallback to 'toParValue'
-        if score_val is None:
-            score_val = r.get('toParValue', 0)
+        # Check multiple potential keys for the score relative to par
+        raw_score = r.get('toParValue') 
+        if raw_score is None:
+            raw_score = r.get('toPar') # Often a string like "-6"
             
         api_map[name] = {
-            "score": int(score_val),
+            "score": parse_score(raw_score),
             "thru": r.get('thru', 'F')
         }
 
@@ -63,19 +76,29 @@ def run():
     results = []
     for line in RAW_EXCEL_DATA.strip().split('\n'):
         parts = line.split('\t')
+        if not parts: continue
         user, picks = parts[0], parts[1:]
         user_total = 0
         html = ""
         
         for p in picks:
             p_clean = p.strip().lower()
-            # Fuzzy match
-            match = next((v for k, v in api_map.items() if p_clean in k or k in p_clean), {"score": 0, "thru": "N/A"})
+            # Find the match in the api_map
+            match = None
+            for api_name, data in api_map.items():
+                if p_clean in api_name or api_name in p_clean:
+                    match = data
+                    break
             
-            s = match['score']
+            if match:
+                s = match['score']
+                thru = match['thru']
+            else:
+                s = 0
+                thru = "N/A"
+            
             user_total += s
-            s_str = "E" if s == 0 else f"{'+' if s > 0 else ''}{s}"
-            html += f'<div class="player-row"><span>{p}</span><span><b>{s_str}</b> [{match["thru"]}]</span></div>'
+            s_str = "E" if s == 0 else-row"><span>{p}</span><span><b>{s_str}</b> [{thru}]</span></div>'
             
         results.append({"User": user, "Score": user_total, "HTML": html})
 
@@ -84,13 +107,20 @@ def run():
     # --- 4. UI ---
     st.markdown("<h1 style='color:#064E3B; font-family:Inter; font-weight:900;'>🏆 THE SYNDICATE DERBY</h1>", unsafe_allow_html=True)
     
+    # Podium (Top 3)
     cols = st.columns(3)
     for i, (_, row) in enumerate(df.head(3).iterrows()):
         with cols[i]:
-            disp = "E" if row['Score'] == 0 else f"{'+' if row['Score'] > 0 else ''}{row['Score']}"
-            st.markdown(f'<div class="podium-card"><div class="user-name">#{i+1} {row["User"]}</div><div class="podium-score">{disp}</div>{row["HTML"]}</div>', unsafe_allow_html=True)
+            disp = "E" if row['Score'] == 0 else f"{'+' if row['Score'] > 0 else '' class="podium-score">{disp}</div>
+                    {row['HTML']}
+                </div>
+            """, unsafe_allow_html=True)
 
+    # Standings Table
     st.markdown("### FULL STANDINGS")
-    st.table(df[["User", "Score"]].set_index("User"))
+    display_df = df[["User", "Score"]].copy()
+    display_df["Score"] = display_df["Score"].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
+    st.table(display_df.set_index("User"))
 
 run()
+st.caption(f"Last Sync: {datetime.now().strftime('%H:%M:%S')}")
