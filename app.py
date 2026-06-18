@@ -17,6 +17,7 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
 
+    /* Podium Card Styling */
     .podium-card { 
         padding: 1.2rem; 
         border: 4px solid #064E3B; 
@@ -51,6 +52,35 @@ st.markdown("""
         color: #333 !important;
     }
 
+    /* MARKET SENTIMENT CUSTOM STYLING */
+    .sentiment-container {
+        background: white;
+        border: 4px solid #064E3B;
+        padding: 20px;
+        box-shadow: 8px 8px 0px #EAB308;
+        margin-bottom: 30px;
+    }
+    .sentiment-row {
+        margin-bottom: 15px;
+    }
+    .sentiment-label {
+        font-weight: 900;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+    }
+    .bar-bg {
+        background: #eee;
+        height: 12px;
+        border: 1px solid #064E3B;
+    }
+    .bar-fill {
+        background: #064E3B;
+        height: 100%;
+    }
+
     [data-testid="stTable"] {
         background-color: white !important;
         border: 2px solid #064E3B !important;
@@ -70,7 +100,7 @@ st.markdown("""
 # --- 2. DATA INPUT ---
 TEAMS = {
     "Martin": ["Bryson DeChambeau", "Scottie Scheffler", "Rory McIlroy"],
-    "Wynand": ["Bryson DeChambeau", "Xander Schauffele", "Ludvig Aberg"],
+    "Wynand": ["Patrick Cantlay", "Xander Schauffele", "Ludvig Aberg"],
     "Rupert": ["Collin Morikawa", "Hideki Matsuyama", "Brooks Koepka"],
     "Frederik": ["Jordan Spieth", "Viktor Hovland", "Tommy Fleetwood"],
     "Gustav": ["Jon Rahm", "Tyrrell Hatton", "Cameron Smith"]
@@ -109,27 +139,18 @@ def run_app():
         all_pro_list = []
         all_picks = []
 
-        # Create Player Map and Master Leaderboard Data
         for row in rows:
             fname = row.get('firstName', '').strip()
             lname = row.get('lastName', '').strip()
-            full_name = f"{fname} {lname}".strip()
-            raw_score = row.get('total', '0')
-            
+            ', '0')
             p_score = parse_score(raw_score)
             p_thru = row.get('thru', 'F')
-            
             player_scores[full_name.lower()] = {"score": p_score, "thru": p_thru}
             
             all_pro_list.append({
                 "Pos": row.get('position', '-'),
                 "Player": full_name,
-                "Score": "E" if p_score == 0 else f"{'+' if p_score > 0 else ''}{p_score}",
-                "Thru": p_thru
-            })
-
-        # Calculate Team Totals
-        leaderboard_results = []
+                "Score": "E" if p_score == 0 else f"{'+' if p_score > 0 else '' []
         for friend, roster in TEAMS.items():
             total_score = 0
             roster_html = ""
@@ -138,44 +159,50 @@ def run_app():
                 p_data = player_scores.get(p_name.lower().strip(), {"score": 0, "thru": "N/A"})
                 p_score = p_data["score"]
                 total_score += p_score
-                s_str = "E" if p_score == 0 else f"{'+' if p_score > 0 else ''}{p_score}"
-                roster_html += f'<div class="player-row"><span>{p_name}</span><span><b>{s_str}</b> <small>[{p_data["thru"]}]</small></span></div>'
+                s_str = "E" if p_score == _html += f'<div class="player-row"><span>{p_name}</span><span><b>{s_str}</b> <small>[{p_data["thru"]}]</small></span></div>'
             
             leaderboard_results.append({"User": friend, "Total": total_score, "HTML": roster_html})
 
         df = pd.DataFrame(leaderboard_results).sort_values(by="Total")
         df['Rank'] = range(1, len(df) + 1)
 
-        # --- A. TOP 5 COLUMNS ---
+        # --- CHAMPIONSHIP FLIGHT (TOP 5) ---
         st.markdown("### CHAMPIONSHIP FLIGHT")
         cols = st.columns(5)
         for i, (_, row) in enumerate(df.head(5).iterrows()):
             with cols[i]:
-                disp = "E" if row['Total'] == 0 else f"{'+' if row['Total'] > 0 else ''}{row['Total']}"
-                st.markdown(f"""
+                disp = "E" if row['Total'] == 0 else f"{f"""
                     <div class="podium-card">
-                        <div class="user-name">#{row['Rank']} {row['User']}</div>
-                        <div class="podium-score">{disp}</div>
+                        <div class="user-name">#{
                         {row['HTML']}
                     </div>
                 """, unsafe_allow_html=True)
 
-        # --- B. FULL STANDINGS TABLE ---
+        # --- MARKET SENTIMENT (UPGRADED) ---
+        st.markdown("### 📊 MARKET SENTIMENT")
+        sentiment = pd.Series(all_picks).value_counts()
+        max_picks = sentiment.max()
+        
+        sentiment_html = '<div class="sentiment-container">'
+        for player, count in sentiment.items():
+            width = (count / max_picks) * 100
+            sentiment_html += f"""
+                <div class="sentiment-row">
+                    <div class="sentiment-label"><span>{player}</span><span>{count} PICKS</span></div>
+                    <div class="bar-bg"><div class="bar-fill" style="width: {width}%;"></div></div>
+                </div>
+            """
+        sentiment_html += '</div>'
+        st.markdown(sentiment_html, unsafe_allow_html=True)
+
+        # --- STANDINGS & MASTER FIELD ---
         st.markdown("### DERBY STANDINGS")
         display_df = df[["Rank", "User", "Total"]].copy()
         display_df["Total"] = display_df["Total"].apply(lambda x: f"+{x}" if x > 0 else ("E" if x == 0 else x))
         st.table(display_df.set_index("Rank"))
 
-        # --- C. MARKET SENTIMENT ---
-        st.markdown("### 📊 MARKET SENTIMENT")
-        sentiment = pd.Series(all_picks).value_counts().reset_index()
-        sentiment.columns = ['Player', 'Selection Count']
-        st.bar_chart(sentiment.set_index('Player'))
-
-        # --- D. REAL TOURNAMENT LEADERBOARD ---
         st.markdown("### ⛳ MASTER FIELD LEADERBOARD")
-        pro_df = pd.DataFrame(all_pro_list)
-        st.dataframe(pro_df.set_index("Pos"), use_container_width=True)
+        st.dataframe(pd.DataFrame(all_pro_list).set_index("Pos"), use_container_width=True)
 
     else:
         st.error("Connecting to live tournament data...")
