@@ -251,7 +251,7 @@ def get_round_dream_team(rows, round_num):
 @st.cache_data(ttl=900)
 @st.cache_data(ttl=900)
 def get_data():
-    url = "https://live-golf-data.p.rapidapi.com/leaderboard"
+    url = "https://live-golf-data.p.rapidapi.com/schedule?orgId=1&year=2026"
     params = {"orgId":"1", "tournId":"026", "year":"2026"}
     headers = {
         "X-RapidAPI-Key": "d67535ff26msh8cb52fc728cc02dp1a972djsnabc60d44defa",
