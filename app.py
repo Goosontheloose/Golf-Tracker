@@ -254,7 +254,7 @@ def get_data():
     url = "https://live-golf-data.p.rapidapi.com/leaderboard"
     params = {"orgId":"1", "tournId":"026", "year":"2026"}
     headers = {
-        "X-RapidAPI-Key": "213c2f2306mshe3d8b437cc34999p108477jsn6f448fb2b30c",
+        "X-RapidAPI-Key": "d67535ff26msh8cb52fc728cc02dp1a972djsnabc60d44defa",
         "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"
     }
     try:
