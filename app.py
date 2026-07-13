@@ -13,7 +13,7 @@ SHEET_URL = "British Open Sheet"
 # This replaces the old "get_teams(RAW_DATA)" function
 try:
     # We read the sheet into a DataFrame
-    existing_data = conn.read(spreadsheet=SHEET_URL)
+    existing_data = conn.read(https://docs.google.com/spreadsheets/d/1BdxK5N3rx2zhkS7EWE1IO4vwwxRQ1J2WZELDJ3_EOao/edit?gid=0#gid=0)
     # Convert the Sheet rows into the TEAM format your app expects
     # We assume columns are: User, Player 1, Player 2, Player 3
     TEAMS = {}
