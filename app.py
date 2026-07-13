@@ -73,14 +73,14 @@ st.title("🏆 154th Open Championship Tracker")
 
 tab_reg, tab_lead, tab_intel, tab_field = st.tabs([
     "✍️ Team Registration", 
-    "📊 Syndicate Leaderboard", 
+    "📊 Leaderboard", 
     "🧠 Field Intelligence", 
     "⛳ Official Master Board"
 ])
 
 # TAB 1: REGISTRATION
 with tab_reg:
-    st.header("Enter Your Syndicate Team")
+    st.header("Enter Your Team")
     with st.form("entry_form", clear_on_submit=True):
         user_name = st.text_input("Participant Name")
         
@@ -107,7 +107,7 @@ with tab_reg:
 
 # TAB 2: LEADERBOARD
 with tab_lead:
-    st.header("Syndicate Standings")
+    st.header("Standings")
     try:
         live_rows = get_live_scores()
         # Create mapping of player name -> score
@@ -147,7 +147,7 @@ with tab_lead:
 
 # TAB 3: FIELD INTELLIGENCE
 with tab_intel:
-    st.header("Syndicate Trends & Analysis")
+    st.header("Trends & Analysis")
     try:
         entries = get_sheet().get_all_records()
         if entries:
