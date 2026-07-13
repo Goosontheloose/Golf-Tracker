@@ -27,19 +27,20 @@ API_KEY = st.secrets["api_key"]
 
 # Current Tournament Settings (Update for the 2025/2026 Open)
 ORG_ID = "1"
-TOURN_ID = "026"  # Using 026 (US Open 2024) for testing data
-YEAR = "2024"
+TOURN_ID = "100"  # Using 026 (US Open 2024) for testing data
+YEAR = "2026"
 
 # Official Top 30 Elite List
+# Updated Top 30 for the 154th Open (July 2026)
 TOP_30 = [
-    "Scottie Scheffler", "Rory McIlroy", "Xander Schauffele", "Ludvig Aberg", 
-    "Bryson DeChambeau", "Collin Morikawa", "Viktor Hovland", "Patrick Cantlay", 
-    "Jon Rahm", "Hideki Matsuyama", "Tommy Fleetwood", "Brooks Koepka", 
-    "Robert MacIntyre", "Tyrrell Hatton", "Cameron Smith", "Shane Lowry", 
-    "Justin Thomas", "Jordan Spieth", "Tony Finau", "Min Woo Lee", 
-    "Sahith Theegala", "Russell Henley", "Keegan Bradley", "Matt Fitzpatrick", 
-    "Wyndham Clark", "Sungjae Im", "Corey Conners", "Sam Burns", 
-    "Jason Day", "Tom Kim"
+    "Scottie Scheffler", "Rory McIlroy", "Cameron Young", "Matt Fitzpatrick", 
+    "Russell Henley", "Collin Morikawa", "Chris Gotterup", "Wyndham Clark", 
+    "Tommy Fleetwood", "Justin Rose", "Jon Rahm", "J.J. Spaun", 
+    "Viktor Hovland", "Xander Schauffele", "Ben Griffin", "Aaron Rai", 
+    "Sam Burns", "Justin Thomas", "Ludvig Aberg", "Robert MacIntyre", 
+    "Tyrrell Hatton", "Si Woo Kim", "Min Woo Lee", "Alex Noren", 
+    "Patrick Reed", "Rickie Fowler", "Ryan Gerard", "Akshay Bhatia", 
+    "Jacob Bridgeman", "Tom Kim"
 ]
 
 @st.cache_data(ttl=3600)
