@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # Replace this with your ACTUAL Google Sheet URL
-SHEET_URL = "YOUR_SHEET_URL_HERE"
+SHEET_URL = "British Open Sheet"
 
 # --- 2. READ EXISTING DATA ---
 # This replaces the old "get_teams(RAW_DATA)" function
