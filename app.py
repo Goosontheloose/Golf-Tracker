@@ -9,6 +9,7 @@ from itertools import combinations
 # --- 1. SETTINGS & STYLING ---
 st.set_page_config(page_title="154th Open Championship Tracker", layout="wide")
 
+# Custom Professional Styling
 st.markdown("""
     <style>
     .main { background-color: #0B1221; color: #F1E9DB; }
@@ -44,123 +45,148 @@ def get_sheet():
     client = gspread.authorize(creds)
     return client.open("British Open Sheet").sheet1 
 
-# --- 3. CONFIG & FIELD ---
+# --- 3. CONFIG & FIELD DATA ---
 API_KEY = st.secrets["api_key"]
 YEAR, TOURN_ID = "2026", "100"
 
+# Full 156-player field
 OFFICIAL_FIELD = ["Scottie Scheffler", "Rory McIlroy", "Matt Fitzpatrick", "Cameron Young", "Russell Henley", "Chris Gotterup", "Collin Morikawa", "Wyndham Clark", "Tommy Fleetwood", "Justin Rose", "Jon Rahm", "Viktor Hovland", "J.J. Spaun", "Xander Schauffele", "Robert MacIntyre", "Ben Griffin", "Aaron Rai", "Sam Burns", "Justin Thomas", "Ludvig Aberg", "Si Woo Kim", "Tyrrell Hatton", "Sepp Straka", "Min Woo Lee", "Alex Noren", "Patrick Reed", "Kristoffer Reitan", "Ryan Gerard", "Akshay Bhatia", "Jacob Bridgeman", "Hideki Matsuyama", "Harris English", "Tom Kim", "JT Poston", "Nicolai Hojgaard", "Kurt Kitayama", "Bryson DeChambeau", "Patrick Cantlay", "Maverick McNealy", "Bud Cauley", "Keegan Bradley", "Rickie Fowler", "Gary Woodland", "Alex Smalley", "Jake Knapp", "Shane Lowry", "Sam Stevens", "Joaquin Niemann", "Daniel Berger", "Marco Penge", "Jordan Spieth", "Nicolas Echavarria", "Corey Conners", "Jason Day", "Michael Kim", "Ryan Fox", "Adam Scott", "Eugenio Chacarra", "Michael Brennan", "Pierceson Coody", "Ryo Hisatsune", "Matt McCarty", "Brian Harman", "Alex Fitzpatrick", "David Puig", "Nick Taylor", "Keith Mitchell", "Andrew Novak", "Michael Thorbjornsen", "Eric Cole", "Matt Wallace", "Sami Valimaki", "Max Homa", "Harry Hall", "Max Greyserman", "Jordan Smith", "Thomas Detry", "Sahith Theegala", "Casey Jarvis", "Jayden Schaper", "Sungjae Im", "Rasmus Hojgaard", "Keita Nakajima", "Rasmus Neergaard-Petersen", "Shaun Norris", "John Parry", "Lucas Herbert", "Daniel Hillier", "Haotong Li", "Kota Kaneko", "Angel Ayora", "Jackson Suber", "Brooks Koepka", "Hennie du Plessis", "Andy Sullivan", "Adrien Saddier", "Jose Luis Ballester", "Tom McKibbin", "Daniel Brown", "Cameron Smith", "Laurie Canter", "Travis Smyth", "Michael Hollick", "Scott Vincent", "Dan Bradbury", "Bernd Wiesberger", "Joakim Lagergren", "Victor Perez", "Jesper Svensson", "Billy Horschel", "Martin Couvra", "Kazuki Higa", "Peter Uihlein", "Alistair Docherty", "Kazuma Kobori", "Antoine Rozner", "Francesco Laporta", "MJ Daffue", "Francesco Molinari", "Ren Yonezawa", "Frederic Lacroix", "Cameron John", "James Nicholas", "Caleb Surratt", "Matthew Jordan", "Naoyuki Kataoka", "Sam Bairstow", "Austen Truslow", "Jeongwoo Ham", "Louis Oosthuizen", "Matthew Southgate", "Ryutaro Nagano", "Jiho Yang", "Padraig Harrington", "Jack Buchanan", "Marcus Plunkett", "Matthew Baldwin", "Tiger Christensen", "Henrik Stenson", "Stewart Cink", "Stuart Grehan", "Darren Clarke", "Alejandro De Castro Piera", "Baard Bjoernevik Skogen", "David Duval", "David Howard", "Fifa Laopakdee", "Jack McDonald", "Johnny Keefer", "Lev Grinberg", "Mason Howell", "Mateo Pulcini", "Nevill Ruiter", "Tim Wiedemeyer", "Tom Sloman"]
-ELITE_30, WILDCARD = OFFICIAL_FIELD[:30], OFFICIAL_FIELD[30:]
+
+# Logic: Wildcard is only players outside the Top 30
+WILDCARD_FIELD = OFFICIAL_FIELD[30:]
 
 # --- 4. DATA FETCHING ---
 @st.cache_data(ttl=900)
-def get_scores():
+def get_live_scores():
     try:
         url = "https://live-golf-data.p.rapidapi.com/leaderboard"
         headers = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
-        res = requests.get(url, headers=headers, params={"orgId": "1", "tournId": TOURN_ID, "year": YEAR})
+        params = {"orgId": "1", "tournId": TOURN_ID, "year": YEAR}
+        res = requests.get(url, headers=headers, params=params)
         return res.json().get('leaderboardRows', [])
-    except:
+    except Exception as e:
+        st.sidebar.error(f"API Sync Error: {e}")
         return []
 
-# --- 5. MAIN UI ---
-st.title("🏆 154th Open Championship")
+# --- 5. APP TABS ---
+st.title("🏆 154th Open Championship Tracker")
 
-tab1, tab2, tab3, tab4 = st.tabs(["✍️ Register Team", "📊 Leaderboard", "🧠 Field Intelligence", "⛳ Live Field"])
+tab_reg, tab_lead, tab_intel, tab_field = st.tabs([
+    "✍️ Team Registration", 
+    "📊 Syndicate Leaderboard", 
+    "🧠 Field Intelligence", 
+    "⛳ Official Master Board"
+])
 
 # TAB 1: REGISTRATION
-with tab1:
-    st.header("Register Your Team")
-    with st.form("main_entry_form", clear_on_submit=True):
-        u_name = st.text_input("Your Full Name")
-        col1, col2, col3 = st.columns(3)
-        with col1: p1 = st.selectbox("Elite Choice 1", ELITE_30)
-        with col2: p2 = st.selectbox("Elite Choice 2", [p for p in ELITE_30 if p != p1])
-        with col3: p3 = st.selectbox("Wildcard Choice", WILDCARD)
+with tab_reg:
+    st.header("Enter Your Syndicate Team")
+    with st.form("entry_form", clear_on_submit=True):
+        user_name = st.text_input("Participant Name")
         
-        if st.form_submit_button("LOCK IN TEAM"):
-            if u_name:
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            pick1 = st.selectbox("Player Choice 1 (Full Field)", OFFICIAL_FIELD)
+        with c2:
+            pick2 = st.selectbox("Player Choice 2 (Full Field)", [p for p in OFFICIAL_FIELD if p != pick1])
+        with c3:
+            pick3 = st.selectbox("Wildcard Choice (Outside Top 30)", WILDCARD_FIELD)
+            
+        submit = st.form_submit_button("LOCK IN TEAM")
+        
+        if submit:
+            if user_name:
                 try:
-                    get_sheet().append_row([u_name, p1, p2, p3])
-                    st.success(f"Successfully Registered: {u_name}")
+                    get_sheet().append_row([user_name, pick1, pick2, pick3])
+                    st.success(f"Team Locked! Good luck, {user_name}.")
                     st.balloons()
-                except Exception as e: st.error(f"Error: {e}")
+                except Exception as e:
+                    st.error(f"Submission Failed: {e}")
             else:
-                st.warning("Please enter your name.")
+                st.warning("Please provide a name for the entry.")
 
-# TAB 2: LEADERBOARD (LIVE SCORES)
-with tab2:
+# TAB 2: LEADERBOARD
+with tab_lead:
+    st.header("Syndicate Standings")
     try:
-        rows = get_scores()
-        # Map player names to their live scores
-        score_dict = {f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower(): r.get('totalToPar', 0) for r in rows}
+        live_rows = get_live_scores()
+        # Create mapping of player name -> score
+        score_map = {f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower(): r.get('totalToPar', 0) for r in live_rows}
         
         entries = get_sheet().get_all_records()
         if entries:
-            results = []
+            final_data = []
             for entry in entries:
-                # Calculate scores (Fallback to 0 if not found)
-                s1 = score_dict.get(entry['P1'].lower(), 0)
-                s2 = score_dict.get(entry['P2'].lower(), 0)
-                s3 = score_dict.get(entry['P3'].lower(), 0)
-                total = s1 + s2 + s3
+                s1 = score_map.get(entry['P1'].lower(), 0)
+                s2 = score_map.get(entry['P2'].lower(), 0)
+                s3 = score_map.get(entry['P3'].lower(), 0)
                 
-                results.append({
+                final_data.append({
                     "User": entry['User'],
                     "P1": f"{entry['P1']} ({s1})",
                     "P2": f"{entry['P2']} ({s2})",
                     "P3": f"{entry['P3']} ({s3})",
-                    "Total": total
+                    "Total Score": s1 + s2 + s3
                 })
             
-            df_res = pd.DataFrame(results).sort_values("Total")
+            df_standings = pd.DataFrame(final_data).sort_values("Total Score")
             
-            # Summary Table (Entry Counts)
-            st.subheader("Syndicate Entry Tracker")
-            summary = df_res['User'].value_counts().reset_index()
-            summary.columns = ['Participant', 'Teams Submitted']
-            st.table(summary)
+            # Show Count of Entries per Person
+            st.subheader("Entries per Participant")
+            entry_counts = df_standings['User'].value_counts().reset_index()
+            entry_counts.columns = ['Participant', 'Total Entries']
+            st.table(entry_counts)
             
-            # Full Standings
+            # Show Detailed Leaderboard
             st.subheader("Live Standings")
-            st.dataframe(df_res, hide_index=True, use_container_width=True)
+            st.dataframe(df_standings, hide_index=True, use_container_width=True)
         else:
-            st.info("No entries yet.")
-    except Exception as e: st.error(f"Leaderboard Error: {e}")
+            st.info("No entries found in the Google Sheet.")
+    except Exception as e:
+        st.error(f"Failed to load leaderboard: {e}")
 
 # TAB 3: FIELD INTELLIGENCE
-with tab3:
-    st.header("Syndicate Data Analysis")
+with tab_intel:
+    st.header("Syndicate Trends & Analysis")
     try:
         entries = get_sheet().get_all_records()
         if entries:
-            all_picks = []
-            team_combos = []
-            duo_combos = []
+            all_picks, triplets, duos = [], [], []
             
             for row in entries:
+                # Standardize team for combo counting
                 team = sorted([row['P1'], row['P2'], row['P3']])
                 all_picks.extend(team)
-                team_combos.append(tuple(team))
-                duo_combos.extend(list(combinations(team, 2)))
+                triplets.append(tuple(team))
+                duos.extend(list(combinations(team, 2)))
+            
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.subheader("Most Selected Players")
+                st.write(pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections']))
+            
+            with col_b:
+                st.subheader("Most Popular Pairs (Duos)")
+                st.write(pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)]))
+            
+            st.subheader("Identical Teams (Triplets)")
+            st.write(pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)]))
+        else:
+            st.info("Insufficient data for intelligence metrics.")
+    except Exception as e:
+        st.error(f"Intelligence Error: {e}")
 
-            c1, c2 = st.columns(2)
-            with c1:
-                st.subheader("Most Picked Players")
-                st.write(pd.DataFrame(Counter(all_picks).most_common(10), columns=['Player', 'Picks']))
-            with c2:
-                st.subheader("The Hive Mind (Pairs)")
-                st.write(pd.DataFrame([{"Pair": f"{d[0]} + {d[1]}", "Count": c} for d, c in Counter(duo_combos).most_common(5)]))
-
-            st.subheader("Full Roster Clones (Triplets)")
-            st.write(pd.DataFrame([{"Team": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(team_combos).most_common(5)]))
-    except Exception as e: st.error(f"Analysis Error: {e}")
-
-# TAB 4: LIVE FIELD
-with tab4:
-    st.header("Tournament Master Board")
-    rows = get_scores()
-    if rows:
-        f_data = [{"Pos": r.get('position'), "Player": f"{r.get('firstName')} {r.get('lastName')}", "Thru": r.get('thru'), "Score": r.get('totalToPar')} for r in rows]
-        st.dataframe(pd.DataFrame(f_data), hide_index=True, use_container_width=True)
+# TAB 4: OFFICIAL MASTER BOARD
+with tab_field:
+    st.header("Official 154th Open Leaderboard")
+    live_rows = get_live_scores()
+    if live_rows:
+        master_data = [{
+            "Pos": r.get('position'), 
+            "Golfer": f"{r.get('firstName')} {r.get('lastName')}", 
+            "Thru": r.get('thru'), 
+            "Score": r.get('totalToPar')
+        } for r in live_rows]
+        st.dataframe(pd.DataFrame(master_data), hide_index=True, use_container_width=True)
     else:
-        st.info("Waiting for tournament to commence...")
+        st.info("Official scores will appear here when play begins.")
