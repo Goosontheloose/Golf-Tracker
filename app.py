@@ -3,11 +3,29 @@ import pandas as pd
 import requests
 import gspread
 from google.oauth2.service_account import Credentials
+from collections import Counter
+from itertools import combinations
 
-# --- 1. SETTINGS ---
+# --- 1. SETTINGS & STYLING ---
 st.set_page_config(page_title="154th Open Championship Tracker", layout="wide")
 
+st.markdown("""
+    <style>
+    .main { background-color: #0B1221; color: #F1E9DB; }
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #1E293B;
+        border: 1px solid #D4AF37;
+        padding: 10px 20px;
+        color: #D4AF37;
+        font-weight: bold;
+    }
+    .stTabs [aria-selected="true"] { background-color: #D4AF37 !important; color: #0B1221 !important; }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- 2. AUTHENTICATION ---
+@st.cache_resource
 def get_sheet():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds_dict = {
@@ -47,58 +65,102 @@ def get_scores():
 # --- 5. MAIN UI ---
 st.title("🏆 154th Open Championship")
 
-# SWAPPED: Register Team is now first
-tab1, tab2, tab3 = st.tabs(["✍️ Register Team", "📊 Leaderboard", "⛳ Live Field"])
+tab1, tab2, tab3, tab4 = st.tabs(["✍️ Register Team", "📊 Leaderboard", "🧠 Field Intelligence", "⛳ Live Field"])
 
+# TAB 1: REGISTRATION
 with tab1:
     st.header("Register Your Team")
     with st.form("main_entry_form", clear_on_submit=True):
         u_name = st.text_input("Your Full Name")
         col1, col2, col3 = st.columns(3)
-        with col1:
-            p1 = st.selectbox("Elite Choice 1", ELITE_30)
-        with col2:
-            p2 = st.selectbox("Elite Choice 2", [p for p in ELITE_30 if p != p1])
-        with col3:
-            p3 = st.selectbox("Wildcard Choice", WILDCARD)
+        with col1: p1 = st.selectbox("Elite Choice 1", ELITE_30)
+        with col2: p2 = st.selectbox("Elite Choice 2", [p for p in ELITE_30 if p != p1])
+        with col3: p3 = st.selectbox("Wildcard Choice", WILDCARD)
         
         if st.form_submit_button("LOCK IN TEAM"):
             if u_name:
                 try:
-                    sheet = get_sheet()
-                    sheet.append_row([u_name, p1, p2, p3])
+                    get_sheet().append_row([u_name, p1, p2, p3])
                     st.success(f"Successfully Registered: {u_name}")
                     st.balloons()
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                except Exception as e: st.error(f"Error: {e}")
             else:
                 st.warning("Please enter your name.")
 
+# TAB 2: LEADERBOARD (LIVE SCORES)
 with tab2:
     try:
         rows = get_scores()
-        sheet = get_sheet()
-        entries = sheet.get_all_records()
+        # Map player names to their live scores
+        score_dict = {f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower(): r.get('totalToPar', 0) for r in rows}
         
+        entries = get_sheet().get_all_records()
         if entries:
-            df_entries = pd.DataFrame(entries)
-            summary = df_entries['User'].value_counts().reset_index()
-            summary.columns = ['Participant', 'Teams Submitted']
+            results = []
+            for entry in entries:
+                # Calculate scores (Fallback to 0 if not found)
+                s1 = score_dict.get(entry['P1'].lower(), 0)
+                s2 = score_dict.get(entry['P2'].lower(), 0)
+                s3 = score_dict.get(entry['P3'].lower(), 0)
+                total = s1 + s2 + s3
+                
+                results.append({
+                    "User": entry['User'],
+                    "P1": f"{entry['P1']} ({s1})",
+                    "P2": f"{entry['P2']} ({s2})",
+                    "P3": f"{entry['P3']} ({s3})",
+                    "Total": total
+                })
             
-            st.subheader("Syndicate Standings")
+            df_res = pd.DataFrame(results).sort_values("Total")
+            
+            # Summary Table (Entry Counts)
+            st.subheader("Syndicate Entry Tracker")
+            summary = df_res['User'].value_counts().reset_index()
+            summary.columns = ['Participant', 'Teams Submitted']
             st.table(summary)
             
-            with st.expander("Show All Team Roster Details"):
-                st.dataframe(df_entries, hide_index=True)
+            # Full Standings
+            st.subheader("Live Standings")
+            st.dataframe(df_res, hide_index=True, use_container_width=True)
         else:
-            st.info("The field is empty. Be the first to register!")
-    except Exception as e:
-        st.error(f"Data Connection Error: {e}")
+            st.info("No entries yet.")
+    except Exception as e: st.error(f"Leaderboard Error: {e}")
 
+# TAB 3: FIELD INTELLIGENCE
 with tab3:
+    st.header("Syndicate Data Analysis")
+    try:
+        entries = get_sheet().get_all_records()
+        if entries:
+            all_picks = []
+            team_combos = []
+            duo_combos = []
+            
+            for row in entries:
+                team = sorted([row['P1'], row['P2'], row['P3']])
+                all_picks.extend(team)
+                team_combos.append(tuple(team))
+                duo_combos.extend(list(combinations(team, 2)))
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader("Most Picked Players")
+                st.write(pd.DataFrame(Counter(all_picks).most_common(10), columns=['Player', 'Picks']))
+            with c2:
+                st.subheader("The Hive Mind (Pairs)")
+                st.write(pd.DataFrame([{"Pair": f"{d[0]} + {d[1]}", "Count": c} for d, c in Counter(duo_combos).most_common(5)]))
+
+            st.subheader("Full Roster Clones (Triplets)")
+            st.write(pd.DataFrame([{"Team": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(team_combos).most_common(5)]))
+    except Exception as e: st.error(f"Analysis Error: {e}")
+
+# TAB 4: LIVE FIELD
+with tab4:
+    st.header("Tournament Master Board")
     rows = get_scores()
     if rows:
-        f_data = [{"Pos": r.get('position'), "Player": f"{r.get('firstName')} {r.get('lastName')}", "Score": r.get('totalToPar')} for r in rows]
+        f_data = [{"Pos": r.get('position'), "Player": f"{r.get('firstName')} {r.get('lastName')}", "Thru": r.get('thru'), "Score": r.get('totalToPar')} for r in rows]
         st.dataframe(pd.DataFrame(f_data), hide_index=True, use_container_width=True)
     else:
-        st.info("Waiting for live field data...")
+        st.info("Waiting for tournament to commence...")
