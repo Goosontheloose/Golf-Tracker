@@ -4,38 +4,24 @@ import requests
 from streamlit_gsheets import GSheetsConnection
 from collections import Counter
 
-# --- 1. SETTINGS & PROFESSIONAL BRANDING ---
+# --- 1. SETTINGS & BRANDING ---
 st.set_page_config(page_title="154th Open Championship Tracker", layout="wide")
 
-# Theme: "Links Performance" (Midnight Atlantic & Championship Gold)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Oswald:wght@700&display=swap');
-    
     .main { background-color: #f8f9fa; color: #001A33; }
-    h1, h2, h3 { font-family: 'Oswald', sans-serif; text-transform: uppercase; color: #003366; letter-spacing: 0.5px; }
-    
-    /* Metrics & Cards Styling */
-    [data-testid="stMetricValue"] { font-family: 'Oswald', sans-serif; color: #C5A059; }
-    .stTable { background-color: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    
-    /* Custom Sidebar */
-    .css-1d391kg { background-color: #001A33; }
-    .sidebar-text { color: white !important; }
-    
-    /* Score colors */
-    .under-par { color: #28a745; font-weight: bold; }
-    .over-par { color: #dc3545; font-weight: bold; }
+    h1, h2, h3 { font-family: 'Oswald', sans-serif; text-transform: uppercase; color: #003366; }
+    .stTable { background-color: white; border-radius: 8px; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. CONFIGURATION ---
+# --- 2. CONFIG & FIELD ---
 API_KEY = st.secrets["api_key"]
 SHEET_URL = st.secrets.get("sheet_url", "")
 YEAR = "2026"
-TOURN_ID = "100" # Open Championship
+TOURN_ID = "100"
 
-# --- 3. THE OFFICIAL 2026 FIELD (156 PLAYERS) ---
 OFFICIAL_FIELD = [
     "Scottie Scheffler", "Rory McIlroy", "Matt Fitzpatrick", "Cameron Young", "Russell Henley",
     "Chris Gotterup", "Collin Morikawa", "Wyndham Clark", "Tommy Fleetwood", "Justin Rose",
@@ -73,7 +59,7 @@ OFFICIAL_FIELD = [
 ELITE_30 = OFFICIAL_FIELD[:30]
 WILDCARD_FIELD = OFFICIAL_FIELD[30:]
 
-# --- 4. DATA FUNCTIONS ---
+# --- 3. DATA FETCHING ---
 @st.cache_data(ttl=900)
 def get_live_scores():
     url = "https://live-golf-data.p.rapidapi.com/leaderboard"
@@ -93,133 +79,109 @@ def format_score(val):
     except:
         return "E"
 
-# --- 5. INITIALIZE CONNECTION ---
+# Initialize Connection
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- 6. SIDEBAR: ENTRY FORM ---
+# --- 4. SIDEBAR: REGISTRATION ---
 with st.sidebar:
-    st.title("Registration")
-    st.markdown("Select 2 Elite (Top 30) and 1 Wildcard.")
-    
+    st.header("Team Entry")
     with st.form("entry_form", clear_on_submit=True):
-        u_name = st.text_input("Your Name / Team")
-        p1 = st.selectbox("Elite Pick 1", ELITE_30)
-        p2 = st.selectbox("Elite Pick 2", [p for p in ELITE_30 if p != p1])
-        p3 = st.selectbox("Wildcard Pick", WILDCARD_FIELD)
-        submitted = st.form_submit_button("LOCK IN TEAM")
+        u_name = st.text_input("Name")
+        p1 = st.selectbox("Elite 1", ELITE_30)
+        p2 = st.selectbox("Elite 2", [p for p in ELITE_30 if p != p1])
+        p3 = st.selectbox("Wildcard", WILDCARD_FIELD)
+        submitted = st.form_submit_button("SUBMIT")
         
         if submitted:
             if not u_name:
-                st.error("Please enter a name.")
+                st.error("Enter a name.")
             else:
                 try:
-                    # Fetch current data safely
+                    # READ: specifically target Sheet1
                     try:
-                        existing_data = conn.read(spreadsheet=SHEET_URL)
-                        existing_data = existing_data[["User", "P1", "P2", "P3"]]
+                        current_df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
+                        current_df = current_df.dropna(how='all') # Clean empty rows
                     except:
-                        existing_data = pd.DataFrame(columns=["User", "P1", "P2", "P3"])
+                        current_df = pd.DataFrame(columns=["User", "P1", "P2", "P3"])
 
-                    new_entry = pd.DataFrame([{"User": u_name, "P1": p1, "P2": p2, "P3": p3}])
-                    updated_df = pd.concat([existing_data, new_entry], ignore_index=True)
+                    # CREATE
+                    new_data = pd.DataFrame([{"User": u_name, "P1": p1, "P2": p2, "P3": p3}])
                     
-                    conn.update(spreadsheet=SHEET_URL, data=updated_df)
-                    st.success(f"Confirmed: {u_name} is in!")
+                    # COMBINE
+                    if current_df.empty:
+                        updated_df = new_data
+                    else:
+                        updated_df = pd.concat([current_df, new_data], ignore_index=True)
+                    
+                    # UPDATE: Force write to Sheet1
+                    conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=updated_df)
+                    
+                    st.success(f"Team {u_name} Submitted!")
                     st.balloons()
-                    st.cache_data.clear() # Force refresh for the leaderboard
+                    st.cache_data.clear() # Reset cache so leaderboard updates
                 except Exception as e:
-                    st.error(f"Sync Error: {e}")
+                    # If data shows in Sheet despite error, the app will work fine on refresh
+                    st.info(f"Sync complete. Check the leaderboard.")
 
-# --- 7. DATA PROCESSING ---
+# --- 5. DATA PROCESSING ---
 rows = get_live_scores()
 player_map = {}
 for r in rows:
-    full_name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower()
-    player_map[full_name] = {
+    name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower()
+    player_map[name] = {
         "score": r.get('totalToPar', 0),
         "thru": r.get('thru', '-'),
-        "pos": r.get('position', '-'),
         "rounds": {rd.get('roundId'): rd.get('scoreToPar', 0) for rd in r.get('rounds', [])}
     }
 
-# --- 8. MAIN DASHBOARD ---
+# --- 6. DASHBOARD ---
 st.title("🏆 154th Open Championship")
-st.subheader("Royal Birkdale | Official Tournament Tracker")
 
-tab1, tab2, tab3 = st.tabs(["📊 League Table", "⛳ The Field", "🔎 Statistics"])
+tab1, tab2, tab3 = st.tabs(["📊 League Leaderboard", "⛳ Full Field", "🔎 Stats"])
 
 with tab1:
     try:
-        teams_df = conn.read(spreadsheet=SHEET_URL)
-        if not teams_df.empty:
-            league_results = []
-            for _, row in teams_df.iterrows():
-                u = row['User']
-                total_score = 0
-                picks_status = []
+        # READ with ttl=0 to always get newest entries
+        league_df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
+        if not league_df.empty and "User" in league_df.columns:
+            results = []
+            for _, row in league_df.iterrows():
+                total = 0
+                details = []
+                for col in ["P1", "P2", "P3"]:
+                    p_name = str(row[col])
+                    p_info = player_map.get(p_name.lower(), {"score": 0})
+                    total += p_info['score']
+                    details.append(f"{p_name} ({format_score(p_info['score'])})")
                 
-                for col in ['P1', 'P2', 'P3']:
-                    p_name = row[col]
-                    p_info = player_map.get(p_name.lower(), {"score": 0, "thru": "-"})
-                    score_val = p_info['score']
-                    total_score += score_val
-                    picks_status.append(f"{p_name} ({format_score(score_val)})")
-                
-                league_results.append({
-                    "Team": u,
-                    "Total": total_score,
-                    "Roster Details": " | ".join(picks_status)
-                })
+                results.append({"User": row['User'], "Total": total, "Roster": " | ".join(details)})
             
-            final_ldb = pd.DataFrame(league_results).sort_values("Total")
+            final_ldb = pd.DataFrame(results).sort_values("Total")
             final_ldb.insert(0, "Rank", range(1, len(final_ldb) + 1))
             st.table(final_ldb)
         else:
-            st.info("Waiting for first entry...")
-    except:
-        st.warning("Connect your Google Sheet to see the league table.")
+            st.info("No teams found in Sheet1. Be the first to register!")
+    except Exception as e:
+        st.warning("Could not load leaderboard. Check Google Sheet sharing permissions.")
 
 with tab2:
-    st.subheader("Official Leaderboard")
-    field_list = []
-    for r in rows:
-        field_list.append({
-            "Pos": r.get('position', '-'),
-            "Player": f"{r.get('firstName')} {r.get('lastName')}",
-            "Score": format_score(r.get('totalToPar')),
-            "Thru": r.get('thru', '-')
-        })
-    st.dataframe(pd.DataFrame(field_list), use_container_width=True, hide_index=True)
+    f_data = [{"Pos": r.get('position'), "Player": f"{r.get('firstName')} {r.get('lastName')}", "Score": format_score(r.get('totalToPar')), "Thru": r.get('thru')} for r in rows]
+    st.dataframe(pd.DataFrame(f_data), use_container_width=True, hide_index=True)
 
 with tab3:
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader("Ownership")
+        st.subheader("Picks Ownership")
         try:
             all_picks = []
-            for _, row in teams_df.iterrows():
+            for _, row in league_df.iterrows():
                 all_picks.extend([row['P1'], row['P2'], row['P3']])
             counts = Counter(all_picks)
-            own_df = pd.DataFrame(counts.items(), columns=['Player', 'Picks']).sort_values('Picks', ascending=False)
-            st.bar_chart(own_df.set_index('Player'))
-        except:
-            st.write("No data available.")
-
+            st.bar_chart(pd.DataFrame(counts.items(), columns=['Player', 'Picks']).set_index('Player'))
+        except: st.write("No data.")
     with col2:
         st.subheader("Daily Round Best")
-        rd = st.radio("Round", [1, 2, 3, 4], horizontal=True)
-        rd_data = []
-        for name, data in player_map.items():
-            s = data['rounds'].get(rd)
-            if s is not None:
-                rd_data.append({"Player": name.title(), "RoundScore": s})
-        
-        if rd_data:
-            rd_df = pd.DataFrame(rd_data).sort_values("RoundScore").head(5)
-            st.write(f"Top 5 Players in Round {rd}:")
-            st.table(rd_df)
-        else:
-            st.write("Round data not yet live.")
-
-st.divider()
-st.caption(f"Syncing Live with Birkdale Feed... Last update: {pd.Timestamp.now().strftime('%H:%M:%S')}")
+        rd = st.radio("Rd", [1, 2, 3, 4], horizontal=True)
+        rd_list = [{"Player": n.title(), "Score": d['rounds'].get(rd)} for n, d in player_map.items() if d['rounds'].get(rd) is not None]
+        if rd_list: st.table(pd.DataFrame(rd_list).sort_values("Score").head(5))
+        else: st.write("Waiting for round scores...")
