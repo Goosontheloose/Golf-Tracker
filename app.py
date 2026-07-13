@@ -6,7 +6,7 @@ from collections import Counter
 from itertools import combinations
 
 # --- 1. SETTINGS & BRANDING ---
-st.set_page_config(page_title="154th Claret Jug Syndicate", layout="wide")
+st.set_page_config(page_title="British Open 2026", layout="wide")
 
 # Coastal Brutalism CSS
 st.markdown("""
