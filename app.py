@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # Replace this with your ACTUAL Google Sheet URL
-SHEET_URL = "British Open Sheet"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1BdxK5N3rx2zhkS7EWE1IO4vwwxRQ1J2WZELDJ3_EOao/edit?gid=0#gid=0"
 
 # --- 2. READ EXISTING DATA ---
 # This replaces the old "get_teams(RAW_DATA)" function
@@ -20,7 +20,7 @@ try:
     for _, row in existing_data.iterrows():
         TEAMS[row['User']] = [row['P1'], row['P2'], row['P3']]
 except Exception as e:
-    st.error("Could not connect to Google Sheets. Check your URL and Secrets.")
+    st.error(f"Connection Error: {e}") # This will tell us the EXACT reason (e.g., 'Permission Denied')
     TEAMS = {}
 
 # --- 3. THE BETTING FORM (Sidebar) ---
