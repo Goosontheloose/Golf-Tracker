@@ -97,31 +97,28 @@ with st.sidebar:
                 st.error("Enter a name.")
             else:
                 try:
-                    # READ: specifically target Sheet1
+                    # 1. READ (Always try to read from the first sheet)
                     try:
-                        current_df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
-                        current_df = current_df.dropna(how='all') # Clean empty rows
+                        current_df = conn.read(spreadsheet=SHEET_URL, ttl=0)
                     except:
                         current_df = pd.DataFrame(columns=["User", "P1", "P2", "P3"])
 
-                    # CREATE
+                    # 2. PREP DATA
                     new_data = pd.DataFrame([{"User": u_name, "P1": p1, "P2": p2, "P3": p3}])
                     
-                    # COMBINE
-                    if current_df.empty:
+                    # 3. COMBINE
+                    if current_df is None or current_df.empty:
                         updated_df = new_data
                     else:
                         updated_df = pd.concat([current_df, new_data], ignore_index=True)
                     
-                    # UPDATE: Force write to Sheet1
-                    conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=updated_df)
-                    
-                    st.success(f"Team {u_name} Submitted!")
+                    # 4. UPDATE
+                    conn.update(spreadsheet=SHEET_URL, data=updated_df)
+                    st.success(f"Team {u_name} Locked In!")
                     st.balloons()
-                    st.cache_data.clear() # Reset cache so leaderboard updates
+                    st.cache_data.clear() 
                 except Exception as e:
-                    # If data shows in Sheet despite error, the app will work fine on refresh
-                    st.info(f"Sync complete. Check the leaderboard.")
+                    st.error(f"Error saving to Sheet: {str(e)}")
 
 # --- 5. DATA PROCESSING ---
 rows = get_live_scores()
@@ -141,28 +138,39 @@ tab1, tab2, tab3 = st.tabs(["📊 League Leaderboard", "⛳ Full Field", "🔎 S
 
 with tab1:
     try:
-        # READ with ttl=0 to always get newest entries
-        league_df = conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
-        if not league_df.empty and "User" in league_df.columns:
+        # We try to read the sheet without specifying a worksheet name to avoid errors
+        league_df = conn.read(spreadsheet=SHEET_URL, ttl=0)
+        
+        if league_df is not None and not league_df.empty and "User" in league_df.columns:
             results = []
             for _, row in league_df.iterrows():
+                # Skip empty rows
+                if pd.isna(row['User']) or str(row['User']).strip() == "": continue
+                
                 total = 0
                 details = []
                 for col in ["P1", "P2", "P3"]:
                     p_name = str(row[col])
                     p_info = player_map.get(p_name.lower(), {"score": 0})
-                    total += p_info['score']
-                    details.append(f"{p_name} ({format_score(p_info['score'])})")
+                    score_val = p_info.get('score', 0)
+                    total += score_val
+                    details.append(f"{p_name} ({format_score(score_val)})")
                 
                 results.append({"User": row['User'], "Total": total, "Roster": " | ".join(details)})
             
-            final_ldb = pd.DataFrame(results).sort_values("Total")
-            final_ldb.insert(0, "Rank", range(1, len(final_ldb) + 1))
-            st.table(final_ldb)
+            if results:
+                final_ldb = pd.DataFrame(results).sort_values("Total")
+                final_ldb.insert(0, "Rank", range(1, len(final_ldb) + 1))
+                st.table(final_ldb)
+            else:
+                st.info("No valid teams found. Submit your picks in the sidebar!")
         else:
-            st.info("No teams found in Sheet1. Be the first to register!")
+            st.info("The spreadsheet is connected but empty. Use the sidebar to enter.")
     except Exception as e:
-        st.warning("Could not load leaderboard. Check Google Sheet sharing permissions.")
+        st.error(f"⚠️ Read Error: {str(e)}")
+        st.write("Troubleshooting Tips:")
+        st.write("1. Is the Google Drive API enabled in your Google Cloud Console?")
+        st.write("2. Is the Sheet shared as 'Editor' with your service account email?")
 
 with tab2:
     f_data = [{"Pos": r.get('position'), "Player": f"{r.get('firstName')} {r.get('lastName')}", "Score": format_score(r.get('totalToPar')), "Thru": r.get('thru')} for r in rows]
@@ -175,7 +183,8 @@ with tab3:
         try:
             all_picks = []
             for _, row in league_df.iterrows():
-                all_picks.extend([row['P1'], row['P2'], row['P3']])
+                if pd.notna(row['User']):
+                    all_picks.extend([row['P1'], row['P2'], row['P3']])
             counts = Counter(all_picks)
             st.bar_chart(pd.DataFrame(counts.items(), columns=['Player', 'Picks']).set_index('Player'))
         except: st.write("No data.")
