@@ -49,7 +49,9 @@ def get_full_field():
     params = {"orgId": ORG_ID, "tournId": TOURN_ID, "year": YEAR}
     headers = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
     try:
-        response = requests.get(url, headers=headers, params=params']}".strip() for p in data.get('players', [])]
+        response = requests.get(url, headers=headers, params=params)
+        data = response.json()
+        players = [f"{p['firstName']} {p['lastName']}".strip() for p in data.get('players', [])]
         return sorted(list(set(players)))
     except:
         return ["Tiger Woods", "Dustin Johnson", "Phil Mickelson"] # Small fallback
@@ -120,14 +122,19 @@ else:
     player_map = {}
     all_pros_seen = []
     for r in rows:
-        fn, ln = r.get('().lower()
+        fn, ln = r.get('firstName', ''), r.get('lastName', '')
+        full_name = f"{fn} {ln}".strip().lower()
         score = r.get('totalToPar', 0)
         # Handle 'E' for Even
         score_val = 0 if score in ['E', 'Even', 0] else int(score)
         
         player_map[full_name] = {
             "score": score_val,
-            board = []
+            "display": f"{fn} {ln} ({score})"
+        }
+
+    # 5b. Calculate Leaderboard
+    leaderboard = []
     all_picks = []
     
     for team in teams:
@@ -161,4 +168,34 @@ else:
         
         # Top 3 Podium
         cols = st.columns(3)
-        for i, row_data in enumerate(df_final.head(3).
+        for i, row_data in enumerate(df_final.head(3).to_dict('records')):
+            with cols[i]:
+                st.metric(f"#{i+1} {row_data['User']}", f"{row_data['Total']} to Par")
+
+        st.header("THE BOARD: SYNDICATE STANDINGS")
+        st.table(df_final[["User", "Total", "Roster"]])
+
+    # 5d. Hive Mind Statistics
+    st.markdown("---")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.header("THE HIVE MIND")
+        if all_picks:
+            top_picked = Counter(all_picks).most_common(5)
+            for p, count in top_picked:
+                st.write(f"**{p}**: {count} Syndicate Members")
+    
+    with c2:
+        st.header("SYNDICATE INSIGHTS")
+        if len(teams) > 0:
+            all_pairs = []
+            for t in teams:
+                roster = sorted([str(t.get('P1','')), str(t.get('P2','')), str(t.get('P3',''))])
+                all_pairs.extend(combinations(roster, 2))
+            
+            top_pair = Counter(all_pairs).most_common(1)
+            if top_pair:
+                p1, p2 = top_pair[0][0]
+                st.write(f"🔥 **Power Duo:** {p1} & {p2}")
+
+st.markdown("<p style='text-align:center; opacity:0.5; margin-top:50px;'>BROADCAST DATA VIA RAPIDAPI | COASTAL BRUTALISM v2.0</p>", unsafe_allow_html=True)
