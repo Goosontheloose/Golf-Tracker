@@ -36,18 +36,21 @@ ELITE_30, WILDCARD = OFFICIAL_FIELD[:30], OFFICIAL_FIELD[30:]
 # --- 4. DATA FETCHING ---
 @st.cache_data(ttl=900)
 def get_scores():
-    url = "https://live-golf-data.p.rapidapi.com/leaderboard"
-    headers = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
-    res = requests.get(url, headers=headers, params={"orgId": "1", "tournId": TOURN_ID, "year": YEAR})
-    return res.json().get('leaderboardRows', [])
+    try:
+        url = "https://live-golf-data.p.rapidapi.com/leaderboard"
+        headers = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
+        res = requests.get(url, headers=headers, params={"orgId": "1", "tournId": TOURN_ID, "year": YEAR})
+        return res.json().get('leaderboardRows', [])
+    except:
+        return []
 
 # --- 5. MAIN UI ---
 st.title("🏆 154th Open Championship")
 
-# Moved Registration into the main Tabs for mobile visibility
-tab1, tab2, tab3 = st.tabs(["📊 Leaderboard", "✍️ Register Team", "⛳ Live Field"])
+# SWAPPED: Register Team is now first
+tab1, tab2, tab3 = st.tabs(["✍️ Register Team", "📊 Leaderboard", "⛳ Live Field"])
 
-with tab2:
+with tab1:
     st.header("Register Your Team")
     with st.form("main_entry_form", clear_on_submit=True):
         u_name = st.text_input("Your Full Name")
@@ -71,21 +74,18 @@ with tab2:
             else:
                 st.warning("Please enter your name.")
 
-with tab1:
+with tab2:
     try:
         rows = get_scores()
-        player_map = {f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower(): r.get('totalToPar', 0) for r in rows}
-        
         sheet = get_sheet()
         entries = sheet.get_all_records()
         
         if entries:
             df_entries = pd.DataFrame(entries)
-            # Count entries per person
             summary = df_entries['User'].value_counts().reset_index()
             summary.columns = ['Participant', 'Teams Submitted']
             
-            st.subheader("Syndicate Standings (Entry Counts)")
+            st.subheader("Syndicate Standings")
             st.table(summary)
             
             with st.expander("Show All Team Roster Details"):
@@ -96,6 +96,9 @@ with tab1:
         st.error(f"Data Connection Error: {e}")
 
 with tab3:
+    rows = get_scores()
     if rows:
         f_data = [{"Pos": r.get('position'), "Player": f"{r.get('firstName')} {r.get('lastName')}", "Score": r.get('totalToPar')} for r in rows]
         st.dataframe(pd.DataFrame(f_data), hide_index=True, use_container_width=True)
+    else:
+        st.info("Waiting for live field data...")
