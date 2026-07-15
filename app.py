@@ -97,14 +97,12 @@ with tab_reg:
             format_func=lambda x: bold_text(x) if x in ELITE_30 else x
         )
     with col2:
-        # Strict Uniqueness: Removes pick1
         pick2 = st.selectbox(
             "Player Choice 2", 
             [p for p in OFFICIAL_FIELD if p != pick1], 
             format_func=lambda x: bold_text(x) if x in ELITE_30 else x
         )
     with col3:
-        # Strict Uniqueness: Removes pick1 and pick2
         pick3 = st.selectbox(
             "Wildcard Choice (Outside Top 30)", 
             [p for p in WILDCARD_FIELD if p not in [pick1, pick2]]
@@ -145,6 +143,10 @@ with tab_lead:
                 })
             
             df_standings = pd.DataFrame(final_data).sort_values("Total Score")
+            
+            # --- NUMBERING FOR LIVE STANDINGS ---
+            df_standings.insert(0, 'Rank', range(1, 1 + len(df_standings)))
+            
             st.subheader("Entries per Participant")
             entry_counts = df_standings['User'].value_counts().reset_index()
             entry_counts.columns = ['Participant', 'Total Entries']
@@ -173,12 +175,24 @@ with tab_intel:
             col_a, col_b = st.columns(2)
             with col_a:
                 st.subheader("Most Selected Players")
-                st.write(pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections']))
+                df_picks = pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections'])
+                # --- NUMBERING ---
+                df_picks.insert(0, '#', range(1, 1 + len(df_picks)))
+                st.dataframe(df_picks, hide_index=True)
+                
             with col_b:
                 st.subheader("Most Popular Pairs")
-                st.write(pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)]))
+                df_duos = pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)])
+                # --- NUMBERING ---
+                df_duos.insert(0, '#', range(1, 1 + len(df_duos)))
+                st.dataframe(df_duos, hide_index=True)
+
             st.subheader("Identical Teams")
-            st.write(pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)]))
+            df_trips = pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)])
+            # --- NUMBERING ---
+            df_trips.insert(0, '#', range(1, 1 + len(df_trips)))
+            st.dataframe(df_trips, hide_index=True, use_container_width=True)
+            
     except Exception as e:
         st.error(f"Intelligence Error: {e}")
 
