@@ -124,7 +124,7 @@ with tab_lead:
     st.header("Standings")
     try:
         live_rows = get_live_scores()
-        
+        st.write(live_rows[0] if live_rows else "No data")
         # --- ROBUST SCORE MAPPING (Fixed for Live Play) ---
         score_map = {}
         for r in live_rows:
