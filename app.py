@@ -21,8 +21,6 @@ st.markdown("""
         font-weight: bold;
     }
     .stTabs [aria-selected="true"] { background-color: #D4AF37 !important; color: #0B1221 !important; }
-    /* Global table tightening */
-    [data-testid="stDataFrame"] { border: 1px solid #1E293B; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -82,14 +80,12 @@ with tab_lead:
         raw_entries = get_sheet().get_all_records()
         if raw_entries:
             final_data = []
-            sample = raw_entries[0]
-            k_user = next((k for k in sample.keys() if 'user' in str(k).lower()), "User")
-            k_p1 = next((k for k in sample.keys() if 'p1' in str(k).lower()), "P1")
-            k_p2 = next((k for k in sample.keys() if 'p2' in str(k).lower()), "P2")
-            k_p3 = next((k for k in sample.keys() if 'p3' in str(k).lower()), "P3")
-
             for entry in raw_entries:
-                p1_name, p2_name, p3_name = str(entry.get(k_p1, "")), str(entry.get(k_p2, "")), str(entry.get(k_p3, ""))
+                p1_name = str(entry.get("P1", entry.get("p1", "")))
+                p2_name = str(entry.get("P2", entry.get("p2", "")))
+                p3_name = str(entry.get("P3", entry.get("p3", "")))
+                user_name = str(entry.get("User", entry.get("user", "Unknown")))
+                
                 if not p1_name: continue
 
                 scores = []
@@ -102,7 +98,7 @@ with tab_lead:
                     scores.append(val)
 
                 final_data.append({
-                    "User": entry.get(k_user, "Unknown"),
+                    "User": user_name,
                     "P1": f"{p1_name} ({'E' if scores[0]==0 else (f'+{scores[0]}' if scores[0]>0 else scores[0])})",
                     "P2": f"{p2_name} ({'E' if scores[1]==0 else (f'+{scores[1]}' if scores[1]>0 else scores[1])})",
                     "P3": f"{p3_name} ({'E' if scores[2]==0 else (f'+{scores[2]}' if scores[2]>0 else scores[2])})",
@@ -114,17 +110,18 @@ with tab_lead:
             df_standings.insert(0, 'Rank', range(1, 1 + len(df_standings)))
             df_standings['Total'] = df_standings['TotalInt'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
             
+            # use_container_width=False prevents stretching
             st.dataframe(
                 df_standings[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], 
                 hide_index=True, 
-                use_container_width=True,
+                use_container_width=False, 
                 column_config={
-                    "Rank": st.column_config.NumberColumn("Rank", width=30, help="Position"),
-                    "User": st.column_config.TextColumn("User"), # Absorbs space
-                    "P1": st.column_config.TextColumn("P1"), # Absorbs space
-                    "P2": st.column_config.TextColumn("P2"), # Absorbs space
-                    "P3": st.column_config.TextColumn("P3"), # Absorbs space
-                    "Total": st.column_config.TextColumn("Total", width=40)
+                    "Rank": st.column_config.NumberColumn("Rank", width=50),
+                    "User": st.column_config.TextColumn("User", width=150),
+                    "P1": st.column_config.TextColumn("P1", width=200),
+                    "P2": st.column_config.TextColumn("P2", width=200),
+                    "P3": st.column_config.TextColumn("P3", width=200),
+                    "Total": st.column_config.TextColumn("Total", width=70)
                 }
             )
     except Exception as e:
@@ -139,12 +136,12 @@ with tab_field:
         st.dataframe(
             pd.DataFrame(master_data), 
             hide_index=True, 
-            use_container_width=True,
+            use_container_width=False,
             column_config={
-                "Pos": st.column_config.TextColumn("Pos", width=30),
-                "Golfer": st.column_config.TextColumn("Golfer"), # Greedy column
-                "Thru": st.column_config.TextColumn("Thru", width=50),
-                "Score": st.column_config.TextColumn("Score", width=50)
+                "Pos": st.column_config.TextColumn("Pos", width=50),
+                "Golfer": st.column_config.TextColumn("Golfer", width=250),
+                "Thru": st.column_config.TextColumn("Thru", width=80),
+                "Score": st.column_config.TextColumn("Score", width=80)
             }
         )
 
@@ -154,14 +151,11 @@ with tab_intel:
     try:
         raw_entries = get_sheet().get_all_records()
         if raw_entries:
-            sample = raw_entries[0]
-            k_p1 = next((k for k in sample.keys() if 'p1' in str(k).lower()), "P1")
-            k_p2 = next((k for k in sample.keys() if 'p2' in str(k).lower()), "P2")
-            k_p3 = next((k for k in sample.keys() if 'p3' in str(k).lower()), "P3")
-
             all_picks, triplets, duos = [], [], []
             for row in raw_entries:
-                p1, p2, p3 = row.get(k_p1, ""), row.get(k_p2, ""), row.get(k_p3, "")
+                p1 = row.get("P1", row.get("p1", ""))
+                p2 = row.get("P2", row.get("p2", ""))
+                p3 = row.get("P3", row.get("p3", ""))
                 if not p1: continue
                 
                 team = sorted([str(p1), str(p2), str(p3)])
@@ -174,18 +168,18 @@ with tab_intel:
                 st.subheader("Most Selected Players")
                 df_picks = pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections'])
                 df_picks.insert(0, '#', range(1, 1 + len(df_picks)))
-                st.dataframe(df_picks, hide_index=True, use_container_width=True, column_config={"#": st.column_config.NumberColumn(width=30)})
+                st.dataframe(df_picks, hide_index=True, use_container_width=False, column_config={"#": st.column_config.NumberColumn(width=50)})
                 
             with col_b:
                 st.subheader("Most Popular Pairs")
                 df_duos = pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)])
                 df_duos.insert(0, '#', range(1, 1 + len(df_duos)))
-                st.dataframe(df_duos, hide_index=True, use_container_width=True, column_config={"#": st.column_config.NumberColumn(width=30)})
+                st.dataframe(df_duos, hide_index=True, use_container_width=False, column_config={"#": st.column_config.NumberColumn(width=50)})
 
             st.subheader("Identical Teams")
             df_trips = pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)])
             df_trips.insert(0, '#', range(1, 1 + len(df_trips)))
-            st.dataframe(df_trips, hide_index=True, use_container_width=True, column_config={"#": st.column_config.NumberColumn(width=30)})
+            st.dataframe(df_trips, hide_index=True, use_container_width=False, column_config={"#": st.column_config.NumberColumn(width=50)})
     except:
         st.info("Gathering more data for analysis...")
 
@@ -196,8 +190,7 @@ with tab_data:
         entries = get_sheet().get_all_records()
         if entries:
             df_raw = pd.DataFrame(entries)
-            # Reindex starting at 1
-            df_raw.insert(0, '#', range(1, 1 + len(df_raw)))
+            df_raw.insert(0, '#', range(1, 1 + len(df_raw))) # Start at 1
             
             search_query = st.text_input("🔍 Search by User or Player Name", "").lower()
             
@@ -210,8 +203,8 @@ with tab_data:
             st.dataframe(
                 df_filtered, 
                 hide_index=True, 
-                use_container_width=True,
-                column_config={"#": st.column_config.NumberColumn(width=30)}
+                use_container_width=False,
+                column_config={"#": st.column_config.NumberColumn(width=50)}
             )
     except:
         st.error("Could not fetch registry data.")
