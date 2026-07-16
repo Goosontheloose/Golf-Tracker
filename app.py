@@ -58,7 +58,6 @@ def get_live_scores():
         res = requests.get(url, headers=headers, params=params)
         return res.json().get('leaderboardRows', [])
     except Exception as e:
-        st.sidebar.error(f"API Sync Error: {e}")
         return []
 
 # --- 5. APP TABS ---
@@ -92,22 +91,26 @@ with tab_lead:
                     val = 0
             score_map[full_name] = val
         
-        # Fetch Sheet and Normalize Headers to prevent "P1" errors
+        # Fetch Sheet
         raw_entries = get_sheet().get_all_records()
+        
         if raw_entries:
-            # Re-mapping keys to lowercase to be safe
-            entries = []
-            for row in raw_entries:
-                normalized_row = {str(k).strip().lower(): v for k, v in row.items()}
-                entries.append(normalized_row)
-
             final_data = []
-            for entry in entries:
-                # Using .get with lowercase keys
-                user = entry.get('user', 'Unknown')
-                p1_name = str(entry.get('p1', '')).strip()
-                p2_name = str(entry.get('p2', '')).strip()
-                p3_name = str(entry.get('p3', '')).strip()
+            
+            # Identify the correct keys dynamically (Smart Header Finder)
+            sample = raw_entries[0]
+            k_user = next((k for k in sample.keys() if 'user' in str(k).lower()), None)
+            k_p1 = next((k for k in sample.keys() if 'p1' in str(k).lower()), None)
+            k_p2 = next((k for k in sample.keys() if 'p2' in str(k).lower()), None)
+            k_p3 = next((k for k in sample.keys() if 'p3' in str(k).lower()), None)
+
+            for entry in raw_entries:
+                user = entry.get(k_user, "Unknown") if k_user else "Unknown"
+                p1_name = str(entry.get(k_p1, "")).strip() if k_p1 else ""
+                p2_name = str(entry.get(k_p2, "")).strip() if k_p2 else ""
+                p3_name = str(entry.get(k_p3, "")).strip() if k_p3 else ""
+
+                if not p1_name and not p2_name: continue # Skip empty rows
 
                 s1 = score_map.get(p1_name.lower(), 0)
                 s2 = score_map.get(p2_name.lower(), 0)
@@ -125,25 +128,26 @@ with tab_lead:
                     "Total Score": s1 + s2 + s3
                 })
             
-            df_standings = pd.DataFrame(final_data).sort_values("Total Score")
-            # Number from 1
-            df_standings.insert(0, 'Rank', range(1, 1 + len(df_standings)))
-            
-            st.subheader("Live Leaderboard")
-            df_display = df_standings.copy()
-            df_display['Total Score'] = df_display['Total Score'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
-            st.dataframe(df_display, hide_index=True, use_container_width=True)
-            
-            st.subheader("Participation Summary")
-            entry_counts = df_standings['User'].value_counts().reset_index()
-            entry_counts.columns = ['Participant', 'Total Entries']
-            # Number from 1
-            entry_counts.index = entry_counts.index + 1
-            st.table(entry_counts)
+            if final_data:
+                df_standings = pd.DataFrame(final_data).sort_values("Total Score")
+                df_standings.insert(0, 'Rank', range(1, 1 + len(df_standings)))
+                
+                st.subheader("Live Leaderboard")
+                df_display = df_standings.copy()
+                df_display['Total Score'] = df_display['Total Score'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
+                st.dataframe(df_display, hide_index=True, use_container_width=True)
+                
+                st.subheader("Participation Summary")
+                entry_counts = df_standings['User'].value_counts().reset_index()
+                entry_counts.columns = ['Participant', 'Total Entries']
+                entry_counts.index = entry_counts.index + 1 # Number from 1
+                st.table(entry_counts)
+            else:
+                st.warning("Data found, but players were blank. Check your Sheet columns.")
         else:
             st.info("No entries found in the Google Sheet.")
     except Exception as e:
-        st.error(f"Failed to load leaderboard: {e}")
+        st.error(f"Logic Error: {e}")
 
 # TAB 2: OFFICIAL MASTER BOARD
 with tab_field:
@@ -160,11 +164,8 @@ with tab_field:
                 "Score": s
             })
         df_master = pd.DataFrame(master_data)
-        # Number from 1
-        df_master.index = df_master.index + 1
+        df_master.index = df_master.index + 1 # Number from 1
         st.dataframe(df_master, use_container_width=True)
-    else:
-        st.info("Official scores will appear here when play begins.")
 
 # TAB 3: FIELD INTELLIGENCE
 with tab_intel:
@@ -172,12 +173,15 @@ with tab_intel:
     try:
         raw_entries = get_sheet().get_all_records()
         if raw_entries:
+            sample = raw_entries[0]
+            k_p1 = next((k for k in sample.keys() if 'p1' in str(k).lower()), None)
+            k_p2 = next((k for k in sample.keys() if 'p2' in str(k).lower()), None)
+            k_p3 = next((k for k in sample.keys() if 'p3' in str(k).lower()), None)
+
             all_picks, triplets, duos = [], [], []
             for row in raw_entries:
-                normalized_row = {str(k).strip().lower(): v for k, v in row.items()}
-                p1 = normalized_row.get('p1', '')
-                p2 = normalized_row.get('p2', '')
-                p3 = normalized_row.get('p3', '')
+                p1, p2, p3 = row.get(k_p1, ""), row.get(k_p2, ""), row.get(k_p3, "")
+                if not p1: continue
                 
                 team = sorted([str(p1), str(p2), str(p3)])
                 all_picks.extend(team)
@@ -201,8 +205,8 @@ with tab_intel:
             df_trips = pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)])
             df_trips.insert(0, '#', range(1, 1 + len(df_trips)))
             st.dataframe(df_trips, hide_index=True, use_container_width=True)
-    except Exception as e:
-        st.error(f"Intelligence Error: {e}")
+    except:
+        st.info("Waiting for more entries to analyze trends.")
 
 # TAB 4: REGISTRY DATA
 with tab_data:
@@ -211,10 +215,7 @@ with tab_data:
         entries = get_sheet().get_all_records()
         if entries:
             df_raw = pd.DataFrame(entries)
-            # Number from 1
-            df_raw.index = df_raw.index + 1
+            df_raw.index = df_raw.index + 1 # Number from 1
             st.dataframe(df_raw, use_container_width=True)
-        else:
-            st.info("No records to display.")
-    except Exception as e:
-        st.error(f"Data Fetch Error: {e}")
+    except:
+        st.error("Could not fetch registry data.")
