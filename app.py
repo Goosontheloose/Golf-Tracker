@@ -81,10 +81,10 @@ with tab_lead:
         if raw_entries:
             final_data = []
             sample = raw_entries[0]
-            k_user = next((k for k in sample.keys() if 'user' in str(k).lower()), None)
-            k_p1 = next((k for k in sample.keys() if 'p1' in str(k).lower()), None)
-            k_p2 = next((k for k in sample.keys() if 'p2' in str(k).lower()), None)
-            k_p3 = next((k for k in sample.keys() if 'p3' in str(k).lower()), None)
+            k_user = next((k for k in sample.keys() if 'user' in str(k).lower()), "User")
+            k_p1 = next((k for k in sample.keys() if 'p1' in str(k).lower()), "P1")
+            k_p2 = next((k for k in sample.keys() if 'p2' in str(k).lower()), "P2")
+            k_p3 = next((k for k in sample.keys() if 'p3' in str(k).lower()), "P3")
 
             for entry in raw_entries:
                 p1_name, p2_name, p3_name = str(entry.get(k_p1, "")), str(entry.get(k_p2, "")), str(entry.get(k_p3, ""))
@@ -117,8 +117,8 @@ with tab_lead:
                 hide_index=True, 
                 use_container_width=True,
                 column_config={
-                    "Rank": st.column_config.NumberColumn("Rank", width="small"),
-                    "Total": st.column_config.TextColumn("Total Score", width="small")
+                    "Rank": st.column_config.NumberColumn("Rank", width=50),
+                    "Total": st.column_config.TextColumn("Total", width=70)
                 }
             )
     except Exception as e:
@@ -134,13 +134,52 @@ with tab_field:
             pd.DataFrame(master_data), 
             hide_index=True, 
             use_container_width=True,
-            column_config={"Pos": st.column_config.TextColumn("Pos", width="small")}
+            column_config={
+                "Pos": st.column_config.TextColumn("Pos", width=50),
+                "Score": st.column_config.TextColumn("Score", width=70)
+            }
         )
 
-# TAB 3: FIELD INTELLIGENCE (Logic maintained from previous version)
+# TAB 3: FIELD INTELLIGENCE
 with tab_intel:
     st.header("Trends & Analysis")
-    # ... logic maintained as per your request to keep the previous successful build ...
+    try:
+        raw_entries = get_sheet().get_all_records()
+        if raw_entries:
+            sample = raw_entries[0]
+            k_p1 = next((k for k in sample.keys() if 'p1' in str(k).lower()), None)
+            k_p2 = next((k for k in sample.keys() if 'p2' in str(k).lower()), None)
+            k_p3 = next((k for k in sample.keys() if 'p3' in str(k).lower()), None)
+
+            all_picks, triplets, duos = [], [], []
+            for row in raw_entries:
+                p1, p2, p3 = row.get(k_p1, ""), row.get(k_p2, ""), row.get(k_p3, "")
+                if not p1: continue
+                
+                team = sorted([str(p1), str(p2), str(p3)])
+                all_picks.extend(team)
+                triplets.append(tuple(team))
+                duos.extend(list(combinations(team, 2)))
+            
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.subheader("Most Selected Players")
+                df_picks = pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections'])
+                df_picks.insert(0, '#', range(1, 1 + len(df_picks)))
+                st.dataframe(df_picks, hide_index=True, use_container_width=True)
+                
+            with col_b:
+                st.subheader("Most Popular Pairs")
+                df_duos = pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)])
+                df_duos.insert(0, '#', range(1, 1 + len(df_duos)))
+                st.dataframe(df_duos, hide_index=True, use_container_width=True)
+
+            st.subheader("Identical Teams")
+            df_trips = pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)])
+            df_trips.insert(0, '#', range(1, 1 + len(df_trips)))
+            st.dataframe(df_trips, hide_index=True, use_container_width=True)
+    except:
+        st.info("Gathering more data for analysis...")
 
 # TAB 4: REGISTRY DATA
 with tab_data:
@@ -149,10 +188,12 @@ with tab_data:
         entries = get_sheet().get_all_records()
         if entries:
             df_raw = pd.DataFrame(entries)
+            # Start index at 1
+            df_raw.index = df_raw.index + 1
+            
             search_query = st.text_input("🔍 Search by User or Player Name", "").lower()
             
             if search_query:
-                # Filter across all columns
                 mask = df_raw.astype(str).apply(lambda x: x.str.lower().str.contains(search_query)).any(axis=1)
                 df_filtered = df_raw[mask]
             else:
