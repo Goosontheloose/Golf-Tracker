@@ -124,8 +124,12 @@ with tab_lead:
     st.header("Standings")
     try:
         live_rows = get_live_scores()
-        score_map = {f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower(): r.get('totalToPar', 0) for r in live_rows}
-        
+        score_map = {}
+for r in live_rows:
+    full_name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower()
+    # Check 'totalToPar', then 'toPar', default to 0 if both are None/missing
+    raw_score = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('toPar', 0)
+    score_map[full_name] = raw_score
         entries = get_sheet().get_all_records()
         if entries:
             final_data = []
@@ -201,12 +205,19 @@ with tab_field:
     st.header("Official 154th Open Leaderboard")
     live_rows = get_live_scores()
     if live_rows:
-        master_data = [{
-            "Pos": r.get('position'), 
-            "Golfer": f"{r.get('firstName')} {r.get('lastName')}", 
-            "Thru": r.get('thru'), 
-            "Score": r.get('totalToPar')
-        } for r in live_rows]
+       master_data = []
+for r in live_rows:
+    # Get score from either key
+    s = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('toPar', 0)
+    # Convert 0 to 'E' for display
+    display_score = "E" if s == 0 else s
+    
+    master_data.append({
+        "Pos": r.get('position'), 
+        "Golfer": f"{r.get('firstName')} {r.get('lastName')}", 
+        "Thru": r.get('thru'), 
+        "Score": display_score
+    })
         st.dataframe(pd.DataFrame(master_data), hide_index=True, use_container_width=True)
     else:
         st.info("Official scores will appear here when play begins.")
