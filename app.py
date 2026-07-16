@@ -63,11 +63,11 @@ WILDCARD_FIELD = OFFICIAL_FIELD[30:]
 
 # --- 4. DATA FETCHING ---
 @st.cache_data(ttl=900)
-def get_live_scores():
+def get_live_scores(year, tourn_id):
     try:
         url = "https://live-golf-data.p.rapidapi.com/leaderboard"
         headers = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
-        params = {"orgId": "1", "tournId": TOURN_ID, "year": YEAR}
+        params = {"orgId": "1", "tournId": tourn_id, "year": year}
         res = requests.get(url, headers=headers, params=params)
         data = res.json()
         return data.get('leaderboard') or data.get('leaderboardRows') or data.get('players') or []
@@ -124,7 +124,7 @@ with tab_reg:
 with tab_lead:
     st.header("Standings")
     try:
-        live_rows = get_live_scores()
+        live_rows = get_live_scores(YEAR, TOURN_ID)
         score_map = {f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower(): r.get('totalToPar', 0) for r in live_rows}
         
         entries = get_sheet().get_all_records()
