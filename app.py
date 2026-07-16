@@ -24,14 +24,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- HELPER: UNICODE BOLD FOR DROPDOWNS ---
-def bold_text(text):
-    """Transforms standard text into Unicode Bold characters for UI display."""
-    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    bold_chars = "𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝗅𝘆𝘇𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"
-    trans = str.maketrans(chars, bold_chars)
-    return text.translate(trans)
-
 # --- 2. AUTHENTICATION ---
 @st.cache_resource
 def get_sheet():
@@ -52,14 +44,9 @@ def get_sheet():
     client = gspread.authorize(creds)
     return client.open("British Open Sheet").sheet1 
 
-# --- 3. CONFIG & FIELD DATA ---
+# --- 3. CONFIG ---
 API_KEY = st.secrets["api_key"]
 YEAR, TOURN_ID = "2026", "100"
-
-OFFICIAL_FIELD = ["Scottie Scheffler", "Rory McIlroy", "Matt Fitzpatrick", "Cameron Young", "Russell Henley", "Chris Gotterup", "Collin Morikawa", "Wyndham Clark", "Tommy Fleetwood", "Justin Rose", "Jon Rahm", "Viktor Hovland", "J.J. Spaun", "Xander Schauffele", "Robert MacIntyre", "Ben Griffin", "Aaron Rai", "Sam Burns", "Justin Thomas", "Ludvig Aberg", "Si Woo Kim", "Tyrrell Hatton", "Sepp Straka", "Min Woo Lee", "Alex Noren", "Patrick Reed", "Kristoffer Reitan", "Ryan Gerard", "Akshay Bhatia", "Jacob Bridgeman", "Hideki Matsuyama", "Harris English", "Tom Kim", "JT Poston", "Nicolai Hojgaard", "Kurt Kitayama", "Bryson DeChambeau", "Patrick Cantlay", "Maverick McNealy", "Bud Cauley", "Keegan Bradley", "Rickie Fowler", "Gary Woodland", "Alex Smalley", "Jake Knapp", "Shane Lowry", "Sam Stevens", "Joaquin Niemann", "Daniel Berger", "Marco Penge", "Jordan Spieth", "Nicolas Echavarria", "Corey Conners", "Jason Day", "Michael Kim", "Ryan Fox", "Adam Scott", "Eugenio Chacarra", "Michael Brennan", "Pierceson Coody", "Ryo Hisatsune", "Matt McCarty", "Brian Harman", "Alex Fitzpatrick", "David Puig", "Nick Taylor", "Keith Mitchell", "Andrew Novak", "Michael Thorbjornsen", "Eric Cole", "Matt Wallace", "Sami Valimaki", "Max Homa", "Harry Hall", "Max Greyserman", "Jordan Smith", "Thomas Detry", "Sahith Theegala", "Casey Jarvis", "Jayden Schaper", "Sungjae Im", "Rasmus Hojgaard", "Keita Nakajima", "Rasmus Neergaard-Petersen", "Shaun Norris", "John Parry", "Lucas Herbert", "Daniel Hillier", "Haotong Li", "Kota Kaneko", "Angel Ayora", "Jackson Suber", "Brooks Koepka", "Hennie du Plessis", "Andy Sullivan", "Adrien Saddier", "Jose Luis Ballester", "Tom McKibbin", "Daniel Brown", "Cameron Smith", "Laurie Canter", "Travis Smyth", "Michael Hollick", "Scott Vincent", "Dan Bradbury", "Bernd Wiesberger", "Joakim Lagergren", "Victor Perez", "Jesper Svensson", "Billy Horschel", "Martin Couvra", "Kazuki Higa", "Peter Uihlein", "Alistair Docherty", "Kazuma Kobori", "Antoine Rozner", "Francesco Laporta", "MJ Daffue", "Francesco Molinari", "Ren Yonezawa", "Frederic Lacroix", "Cameron John", "James Nicholas", "Caleb Surratt", "Matthew Jordan", "Naoyuki Kataoka", "Sam Bairstow", "Austen Truslow", "Jeongwoo Ham", "Aldrich Potgieter", "Matthew Southgate", "Ryutaro Nagano", "Jiho Yang", "Padraig Harrington", "Jack Buchanan", "Marcus Plunkett", "Matthew Baldwin", "Tiger Christensen", "Henrik Stenson", "Stewart Cink", "Stuart Grehan", "Darren Clarke", "Alejandro De Castro Piera", "Baard Bjoernevik Skogen", "David Duval", "David Howard", "Fifa Laopakdee", "Jack McDonald", "Johnny Keefer", "Lev Grinberg", "Mason Howell", "Mateo Pulcini", "Nevill Ruiter", "Tim Wiedemeyer", "Tom Sloman"]
-
-ELITE_30 = OFFICIAL_FIELD[:30]
-WILDCARD_FIELD = OFFICIAL_FIELD[30:]
 
 # --- 4. DATA FETCHING ---
 @st.cache_data(ttl=900)
@@ -77,12 +64,11 @@ def get_live_scores():
 # --- 5. APP TABS ---
 st.title("🏆 154th Open Championship Tracker")
 
-tab_lead, tab_field, tab_intel, tab_data, tab_reg = st.tabs([
+tab_lead, tab_field, tab_intel, tab_data = st.tabs([
     "📊 Live Standings", 
     "⛳ Official Master Board",
     "🧠 Field Intelligence", 
-    "📁 Registry Data",
-    "✍️ Team Registration"
+    "📁 Registry Data"
 ])
 
 # TAB 1: LIVE STANDINGS
@@ -91,12 +77,13 @@ with tab_lead:
     try:
         live_rows = get_live_scores()
         
+        # Build Score Map from API
         score_map = {}
         for r in live_rows:
             full_name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower()
             raw_score = r.get('total', 'E')
             
-            if raw_score in ['E', 'Even', '-', '']:
+            if raw_score in ['E', 'Even', '-', '', '0']:
                 val = 0
             else:
                 try:
@@ -105,27 +92,41 @@ with tab_lead:
                     val = 0
             score_map[full_name] = val
         
-        entries = get_sheet().get_all_records()
-        if entries:
+        # Fetch Sheet and Normalize Headers to prevent "P1" errors
+        raw_entries = get_sheet().get_all_records()
+        if raw_entries:
+            # Re-mapping keys to lowercase to be safe
+            entries = []
+            for row in raw_entries:
+                normalized_row = {str(k).strip().lower(): v for k, v in row.items()}
+                entries.append(normalized_row)
+
             final_data = []
             for entry in entries:
-                s1 = score_map.get(str(entry['P1']).lower(), 0)
-                s2 = score_map.get(str(entry['P2']).lower(), 0)
-                s3 = score_map.get(str(entry['P3']).lower(), 0)
+                # Using .get with lowercase keys
+                user = entry.get('user', 'Unknown')
+                p1_name = str(entry.get('p1', '')).strip()
+                p2_name = str(entry.get('p2', '')).strip()
+                p3_name = str(entry.get('p3', '')).strip()
+
+                s1 = score_map.get(p1_name.lower(), 0)
+                s2 = score_map.get(p2_name.lower(), 0)
+                s3 = score_map.get(p3_name.lower(), 0)
                 
                 d1 = "E" if s1 == 0 else (f"+{s1}" if s1 > 0 else s1)
                 d2 = "E" if s2 == 0 else (f"+{s2}" if s2 > 0 else s2)
                 d3 = "E" if s3 == 0 else (f"+{s3}" if s3 > 0 else s3)
                 
                 final_data.append({
-                    "User": entry['User'],
-                    "P1": f"{entry['P1']} ({d1})",
-                    "P2": f"{entry['P2']} ({d2})",
-                    "P3": f"{entry['P3']} ({d3})",
+                    "User": user,
+                    "P1": f"{p1_name} ({d1})",
+                    "P2": f"{p2_name} ({d2})",
+                    "P3": f"{p3_name} ({d3})",
                     "Total Score": s1 + s2 + s3
                 })
             
             df_standings = pd.DataFrame(final_data).sort_values("Total Score")
+            # Number from 1
             df_standings.insert(0, 'Rank', range(1, 1 + len(df_standings)))
             
             st.subheader("Live Leaderboard")
@@ -136,6 +137,8 @@ with tab_lead:
             st.subheader("Participation Summary")
             entry_counts = df_standings['User'].value_counts().reset_index()
             entry_counts.columns = ['Participant', 'Total Entries']
+            # Number from 1
+            entry_counts.index = entry_counts.index + 1
             st.table(entry_counts)
         else:
             st.info("No entries found in the Google Sheet.")
@@ -156,7 +159,10 @@ with tab_field:
                 "Thru": r.get('thru'), 
                 "Score": s
             })
-        st.dataframe(pd.DataFrame(master_data), hide_index=True, use_container_width=True)
+        df_master = pd.DataFrame(master_data)
+        # Number from 1
+        df_master.index = df_master.index + 1
+        st.dataframe(df_master, use_container_width=True)
     else:
         st.info("Official scores will appear here when play begins.")
 
@@ -164,11 +170,16 @@ with tab_field:
 with tab_intel:
     st.header("Trends & Analysis")
     try:
-        entries = get_sheet().get_all_records()
-        if entries:
+        raw_entries = get_sheet().get_all_records()
+        if raw_entries:
             all_picks, triplets, duos = [], [], []
-            for row in entries:
-                team = sorted([row['P1'], row['P2'], row['P3']])
+            for row in raw_entries:
+                normalized_row = {str(k).strip().lower(): v for k, v in row.items()}
+                p1 = normalized_row.get('p1', '')
+                p2 = normalized_row.get('p2', '')
+                p3 = normalized_row.get('p3', '')
+                
+                team = sorted([str(p1), str(p2), str(p3)])
                 all_picks.extend(team)
                 triplets.append(tuple(team))
                 duos.extend(list(combinations(team, 2)))
@@ -199,43 +210,11 @@ with tab_data:
     try:
         entries = get_sheet().get_all_records()
         if entries:
-            st.dataframe(pd.DataFrame(entries), use_container_width=True)
+            df_raw = pd.DataFrame(entries)
+            # Number from 1
+            df_raw.index = df_raw.index + 1
+            st.dataframe(df_raw, use_container_width=True)
         else:
             st.info("No records to display.")
     except Exception as e:
         st.error(f"Data Fetch Error: {e}")
-
-# TAB 5: REGISTRATION
-with tab_reg:
-    st.header("Enter Your Team")
-    user_name = st.text_input("Participant Name")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        pick1 = st.selectbox(
-            "Player Choice 1", 
-            OFFICIAL_FIELD, 
-            format_func=lambda x: bold_text(x) if x in ELITE_30 else x
-        )
-    with col2:
-        pick2 = st.selectbox(
-            "Player Choice 2", 
-            [p for p in OFFICIAL_FIELD if p != pick1], 
-            format_func=lambda x: bold_text(x) if x in ELITE_30 else x
-        )
-    with col3:
-        pick3 = st.selectbox(
-            "Wildcard Choice (Outside Top 30)", 
-            [p for p in WILDCARD_FIELD if p not in [pick1, pick2]]
-        )
-        
-    if st.button("LOCK IN TEAM"):
-        if user_name:
-            try:
-                get_sheet().append_row([user_name, pick1, pick2, pick3])
-                st.success(f"Team Locked! Good luck, {user_name}.")
-                st.balloons()
-            except Exception as e:
-                st.error(f"Submission Failed: {e}")
-        else:
-            st.warning("Please provide a name for the entry.")
