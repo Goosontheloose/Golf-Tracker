@@ -24,15 +24,17 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- HELPER: UNICODE BOLD FOR DROPDOWNS ---
-def bold_text(text):
-    """Transforms standard text into Unicode Bold characters for UI display."""
-    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    bold_chars = "𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"
-    trans = str.maketrans(chars, bold_chars)
-    return text.translate(trans)
+# --- 2. TOP 30 REFERENCE (JULY 2026) ---
+TOP_30 = [
+    "Scottie Scheffler", "Rory McIlroy", "Xander Schauffele", "Ludvig Aberg", "Wyndham Clark",
+    "Viktor Hovland", "Collin Morikawa", "Patrick Cantlay", "Bryson DeChambeau", "Jon Rahm",
+    "Tommy Fleetwood", "Brooks Koepka", "Matt Fitzpatrick", "Jordan Spieth", "Max Homa",
+    "Hideki Matsuyama", "Sahith Theegala", "Tyrrell Hatton", "Cameron Smith", "Keegan Bradley",
+    "Tommy Fleetwood", "Jason Day", "Tom Kim", "Tony Finau", "Brian Harman", 
+    "Sungjae Im", "Russell Henley", "Justin Thomas", "Shane Lowry", "Min Woo Lee"
+]
 
-# --- 2. AUTHENTICATION ---
+# --- 3. AUTHENTICATION ---
 @st.cache_resource
 def get_sheet():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -52,16 +54,11 @@ def get_sheet():
     client = gspread.authorize(creds)
     return client.open("British Open Sheet").sheet1 
 
-# --- 3. CONFIG & FIELD DATA ---
+# --- 4. CONFIG ---
 API_KEY = st.secrets["api_key"]
 YEAR, TOURN_ID = "2026", "100"
 
-OFFICIAL_FIELD = ["Scottie Scheffler", "Rory McIlroy", "Matt Fitzpatrick", "Cameron Young", "Russell Henley", "Chris Gotterup", "Collin Morikawa", "Wyndham Clark", "Tommy Fleetwood", "Justin Rose", "Jon Rahm", "Viktor Hovland", "J.J. Spaun", "Xander Schauffele", "Robert MacIntyre", "Ben Griffin", "Aaron Rai", "Sam Burns", "Justin Thomas", "Ludvig Aberg", "Si Woo Kim", "Tyrrell Hatton", "Sepp Straka", "Min Woo Lee", "Alex Noren", "Patrick Reed", "Kristoffer Reitan", "Ryan Gerard", "Akshay Bhatia", "Jacob Bridgeman", "Hideki Matsuyama", "Harris English", "Tom Kim", "JT Poston", "Nicolai Hojgaard", "Kurt Kitayama", "Bryson DeChambeau", "Patrick Cantlay", "Maverick McNealy", "Bud Cauley", "Keegan Bradley", "Rickie Fowler", "Gary Woodland", "Alex Smalley", "Jake Knapp", "Shane Lowry", "Sam Stevens", "Joaquin Niemann", "Daniel Berger", "Marco Penge", "Jordan Spieth", "Nicolas Echavarria", "Corey Conners", "Jason Day", "Michael Kim", "Ryan Fox", "Adam Scott", "Eugenio Chacarra", "Michael Brennan", "Pierceson Coody", "Ryo Hisatsune", "Matt McCarty", "Brian Harman", "Alex Fitzpatrick", "David Puig", "Nick Taylor", "Keith Mitchell", "Andrew Novak", "Michael Thorbjornsen", "Eric Cole", "Matt Wallace", "Sami Valimaki", "Max Homa", "Harry Hall", "Max Greyserman", "Jordan Smith", "Thomas Detry", "Sahith Theegala", "Casey Jarvis", "Jayden Schaper", "Sungjae Im", "Rasmus Hojgaard", "Keita Nakajima", "Rasmus Neergaard-Petersen", "Shaun Norris", "John Parry", "Lucas Herbert", "Daniel Hillier", "Haotong Li", "Kota Kaneko", "Angel Ayora", "Jackson Suber", "Brooks Koepka", "Hennie du Plessis", "Andy Sullivan", "Adrien Saddier", "Jose Luis Ballester", "Tom McKibbin", "Daniel Brown", "Cameron Smith", "Laurie Canter", "Travis Smyth", "Michael Hollick", "Scott Vincent", "Dan Bradbury", "Bernd Wiesberger", "Joakim Lagergren", "Victor Perez", "Jesper Svensson", "Billy Horschel", "Martin Couvra", "Kazuki Higa", "Peter Uihlein", "Alistair Docherty", "Kazuma Kobori", "Antoine Rozner", "Francesco Laporta", "MJ Daffue", "Francesco Molinari", "Ren Yonezawa", "Frederic Lacroix", "Cameron John", "James Nicholas", "Caleb Surratt", "Matthew Jordan", "Naoyuki Kataoka", "Sam Bairstow", "Austen Truslow", "Jeongwoo Ham", "Aldrich Potgieter", "Matthew Southgate", "Ryutaro Nagano", "Jiho Yang", "Padraig Harrington", "Jack Buchanan", "Marcus Plunkett", "Matthew Baldwin", "Tiger Christensen", "Henrik Stenson", "Stewart Cink", "Stuart Grehan", "Darren Clarke", "Alejandro De Castro Piera", "Baard Bjoernevik Skogen", "David Duval", "David Howard", "Fifa Laopakdee", "Jack McDonald", "Johnny Keefer", "Lev Grinberg", "Mason Howell", "Mateo Pulcini", "Nevill Ruiter", "Tim Wiedemeyer", "Tom Sloman"]
-
-ELITE_30 = OFFICIAL_FIELD[:30]
-WILDCARD_FIELD = OFFICIAL_FIELD[30:]
-
-# --- 4. DATA FETCHING ---
+# --- 5. DATA FETCHING ---
 @st.cache_data(ttl=900)
 def get_live_scores():
     try:
@@ -71,142 +68,193 @@ def get_live_scores():
         res = requests.get(url, headers=headers, params=params)
         return res.json().get('leaderboardRows', [])
     except Exception as e:
-        st.sidebar.error(f"API Sync Error: {e}")
         return []
 
-# --- 5. APP TABS ---
+# --- 6. APP TABS ---
 st.title("🏆 154th Open Championship Tracker")
 
-tab_reg, tab_lead, tab_intel, tab_field = st.tabs([
-    "✍️ Team Registration", 
-    "📊 Leaderboard", 
+tab_lead, tab_field, tab_intel, tab_data = st.tabs([
+    "📊 Live Standings", 
+    "⛳ Official Master Board",
     "🧠 Field Intelligence", 
-    "⛳ Official Master Board"
+    "📁 Registry Data"
 ])
 
-# TAB 1: REGISTRATION
-with tab_reg:
-    st.header("Enter Your Team")
-    user_name = st.text_input("Participant Name")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        pick1 = st.selectbox(
-            "Player Choice 1", 
-            OFFICIAL_FIELD, 
-            format_func=lambda x: bold_text(x) if x in ELITE_30 else x
-        )
-    with col2:
-        pick2 = st.selectbox(
-            "Player Choice 2", 
-            [p for p in OFFICIAL_FIELD if p != pick1], 
-            format_func=lambda x: bold_text(x) if x in ELITE_30 else x
-        )
-    with col3:
-        pick3 = st.selectbox(
-            "Wildcard Choice (Outside Top 30)", 
-            [p for p in WILDCARD_FIELD if p not in [pick1, pick2]]
-        )
-        
-    if st.button("LOCK IN TEAM"):
-        if user_name:
-            try:
-                get_sheet().append_row([user_name, pick1, pick2, pick3])
-                st.success(f"Team Locked! Good luck, {user_name}.")
-                st.balloons()
-            except Exception as e:
-                st.error(f"Submission Failed: {e}")
-        else:
-            st.warning("Please provide a name for the entry.")
-
-# TAB 2: LEADERBOARD
+# TAB 1: LIVE STANDINGS
 with tab_lead:
-    st.header("Standings")
+    st.header("Tournament Standings")
     try:
         live_rows = get_live_scores()
-        score_map = {f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower(): r.get('totalToPar', 0) for r in live_rows}
+        score_map = {}
+        for r in live_rows:
+            full_name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
+            # Fallback for scores
+            s = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('total', 'E')
+            score_map[full_name.lower()] = s
         
-        entries = get_sheet().get_all_records()
-        if entries:
+        raw_entries = get_sheet().get_all_records()
+        if raw_entries:
             final_data = []
-            for entry in entries:
-                s1 = score_map.get(str(entry['P1']).lower(), 0)
-                s2 = score_map.get(str(entry['P2']).lower(), 0)
-                s3 = score_map.get(str(entry['P3']).lower(), 0)
+            for entry in raw_entries:
+                p1_name = str(entry.get("P1", entry.get("p1", "")))
+                p2_name = str(entry.get("P2", entry.get("p2", "")))
+                p3_name = str(entry.get("P3", entry.get("p3", "")))
+                user_name = str(entry.get("User", entry.get("user", "Unknown")))
                 
+                if not p1_name: continue
+
+                scores = []
+                for name in [p1_name, p2_name, p3_name]:
+                    s = score_map.get(name.lower(), 'E')
+                    try: 
+                        val = int(str(s).replace('+', '')) if s not in ['E', 'Even', '-', ''] else 0
+                    except: 
+                        val = 0
+                    scores.append(val)
+
                 final_data.append({
-                    "User": entry['User'],
-                    "P1": f"{entry['P1']} ({s1})",
-                    "P2": f"{entry['P2']} ({s2})",
-                    "P3": f"{entry['P3']} ({s3})",
-                    "Total Score": s1 + s2 + s3
+                    "User": user_name,
+                    "P1": f"{p1_name} ({'E' if scores[0]==0 else (f'+{scores[0]}' if scores[0]>0 else scores[0])})",
+                    "P2": f"{p2_name} ({'E' if scores[1]==0 else (f'+{scores[1]}' if scores[1]>0 else scores[1])})",
+                    "P3": f"{p3_name} ({'E' if scores[2]==0 else (f'+{scores[2]}' if scores[2]>0 else scores[2])})",
+                    "TotalInt": sum(scores)
                 })
             
-            df_standings = pd.DataFrame(final_data).sort_values("Total Score")
-            
-            # --- NUMBERING FOR LIVE STANDINGS ---
+            df_standings = pd.DataFrame(final_data)
+            df_standings = df_standings.sort_values("TotalInt")
             df_standings.insert(0, 'Rank', range(1, 1 + len(df_standings)))
+            df_standings['Total'] = df_standings['TotalInt'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
             
-            st.subheader("Entries per Participant")
-            entry_counts = df_standings['User'].value_counts().reset_index()
-            entry_counts.columns = ['Participant', 'Total Entries']
-            st.table(entry_counts)
-            
-            st.subheader("Live Standings")
-            st.dataframe(df_standings, hide_index=True, use_container_width=True)
-        else:
-            st.info("No entries found in the Google Sheet.")
+            st.dataframe(
+                df_standings[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], 
+                hide_index=True, 
+                use_container_width=True,
+                column_config={
+                    "Rank": st.column_config.NumberColumn("Rank", width=35),
+                    "User": st.column_config.TextColumn("User", width="medium"),
+                    "Total": st.column_config.TextColumn("Total", width=50)
+                }
+            )
     except Exception as e:
-        st.error(f"Failed to load leaderboard: {e}")
+        st.error(f"Error: {e}")
 
-# TAB 3: FIELD INTELLIGENCE
-with tab_intel:
-    st.header("Trends & Analysis")
-    try:
-        entries = get_sheet().get_all_records()
-        if entries:
-            all_picks, triplets, duos = [], [], []
-            for row in entries:
-                team = sorted([row['P1'], row['P2'], row['P3']])
-                all_picks.extend(team)
-                triplets.append(tuple(team))
-                duos.extend(list(combinations(team, 2)))
-            
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.subheader("Most Selected Players")
-                df_picks = pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections'])
-                # --- NUMBERING ---
-                df_picks.insert(0, '#', range(1, 1 + len(df_picks)))
-                st.dataframe(df_picks, hide_index=True)
-                
-            with col_b:
-                st.subheader("Most Popular Pairs")
-                df_duos = pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)])
-                # --- NUMBERING ---
-                df_duos.insert(0, '#', range(1, 1 + len(df_duos)))
-                st.dataframe(df_duos, hide_index=True)
-
-            st.subheader("Identical Teams")
-            df_trips = pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)])
-            # --- NUMBERING ---
-            df_trips.insert(0, '#', range(1, 1 + len(df_trips)))
-            st.dataframe(df_trips, hide_index=True, use_container_width=True)
-            
-    except Exception as e:
-        st.error(f"Intelligence Error: {e}")
-
-# TAB 4: OFFICIAL MASTER BOARD
+# TAB 2: OFFICIAL MASTER BOARD
 with tab_field:
     st.header("Official 154th Open Leaderboard")
     live_rows = get_live_scores()
     if live_rows:
-        master_data = [{
-            "Pos": r.get('position'), 
-            "Golfer": f"{r.get('firstName')} {r.get('lastName')}", 
-            "Thru": r.get('thru'), 
-            "Score": r.get('totalToPar')
-        } for r in live_rows]
-        st.dataframe(pd.DataFrame(master_data), hide_index=True, use_container_width=True)
-    else:
-        st.info("Official scores will appear here when play begins.")
+        master_data = [{"Pos": r.get('position'), "Golfer": f"{r.get('firstName')} {r.get('lastName')}", "Thru": r.get('thru'), "Score": r.get('totalToPar') if r.get('totalToPar') is not None else r.get('total', 'E')} for r in live_rows]
+        st.dataframe(
+            pd.DataFrame(master_data), 
+            hide_index=True, 
+            use_container_width=True,
+            column_config={
+                "Pos": st.column_config.TextColumn("Pos", width=35),
+                "Golfer": st.column_config.TextColumn("Golfer", width="large"),
+                "Thru": st.column_config.TextColumn("Thru", width=50),
+                "Score": st.column_config.TextColumn("Score", width=50)
+            }
+        )
+
+# TAB 3: FIELD INTELLIGENCE
+with tab_intel:
+    st.header("Trends & Analysis")
+    live_rows = get_live_scores()
+    
+    # 1. PERFECT ROSTER CALCULATION
+    if live_rows:
+        try:
+            pro_scores = []
+            for r in live_rows:
+                name = f"{r.get('firstName')} {r.get('lastName')}".strip()
+                s = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('total', 'E')
+                try: 
+                    val = int(str(s).replace('+', '')) if s not in ['E', 'Even', '-', ''] else 0
+                except: 
+                    val = 0
+                pro_scores.append({"name": name, "score": val, "is_elite": name in TOP_30})
+            
+            df_pro = pd.DataFrame(pro_scores).sort_values("score")
+            
+            # Constraint: At least 1 player must be outside top 30
+            wildcards = df_pro[df_pro['is_elite'] == False]
+            if not wildcards.empty:
+                best_wildcard = wildcards.iloc[0]
+                # Best 2 others from the remaining field
+                others = df_pro[df_pro['name'] != best_wildcard['name']].iloc[:2]
+                perfect_team = [best_wildcard] + others.to_dict('records')
+                perfect_score = sum([p['score'] for p in perfect_team])
+                perfect_score_fmt = "E" if perfect_score == 0 else (f"+{perfect_score}" if perfect_score > 0 else perfect_score)
+                
+                st.subheader("💎 The Perfect Roster")
+                st.info(f"The best possible score currently is **{perfect_score_fmt}** using:")
+                cols = st.columns(3)
+                for i, p in enumerate(perfect_team):
+                    tag = " (Wildcard)" if not p['is_elite'] else " (Elite)"
+                    score_tag = "E" if p['score'] == 0 else (f"+{p['score']}" if p['score'] > 0 else p['score'])
+                    cols[i].metric(label=f"Player {i+1}{tag}", value=p['name'], delta=f"Score: {score_tag}", delta_color="inverse")
+        except:
+            pass
+
+    # 2. PICK TRENDS
+    try:
+        raw_entries = get_sheet().get_all_records()
+        if raw_entries:
+            all_picks, triplets, duos = [], [], []
+            for row in raw_entries:
+                p1 = row.get("P1", row.get("p1", ""))
+                p2 = row.get("P2", row.get("p2", ""))
+                p3 = row.get("P3", row.get("p3", ""))
+                if not p1: continue
+                
+                team = sorted([str(p1), str(p2), str(p3)])
+                all_picks.extend(team)
+                triplets.append(tuple(team))
+                duos.extend(list(combinations(team, 2)))
+            
+            st.divider()
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.subheader("Most Selected Players")
+                df_picks = pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections'])
+                df_picks.insert(0, '#', range(1, 1 + len(df_picks)))
+                st.dataframe(df_picks, hide_index=True, use_container_width=True, column_config={"#": st.column_config.NumberColumn(width=35)})
+                
+            with col_b:
+                st.subheader("Most Popular Pairs")
+                df_duos = pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)])
+                df_duos.insert(0, '#', range(1, 1 + len(df_duos)))
+                st.dataframe(df_duos, hide_index=True, use_container_width=True, column_config={"#": st.column_config.NumberColumn(width=35)})
+
+            st.subheader("Identical Teams")
+            df_trips = pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)])
+            df_trips.insert(0, '#', range(1, 1 + len(df_trips)))
+            st.dataframe(df_trips, hide_index=True, use_container_width=True, column_config={"#": st.column_config.NumberColumn(width=35)})
+    except:
+        st.info("Gathering more data for analysis...")
+
+# TAB 4: REGISTRY DATA
+with tab_data:
+    st.header("Search Registry")
+    try:
+        entries = get_sheet().get_all_records()
+        if entries:
+            df_raw = pd.DataFrame(entries)
+            df_raw.insert(0, '#', range(1, 1 + len(df_raw)))
+            
+            search_query = st.text_input("🔍 Search by User or Player Name", "").lower()
+            
+            if search_query:
+                mask = df_raw.astype(str).apply(lambda x: x.str.lower().str.contains(search_query)).any(axis=1)
+                df_filtered = df_raw[mask]
+            else:
+                df_filtered = df_raw
+
+            st.dataframe(
+                df_filtered, 
+                hide_index=True, 
+                use_container_width=True,
+                column_config={"#": st.column_config.NumberColumn(width=35)}
+            )
+    except:
+        st.error("Could not fetch registry data.")
