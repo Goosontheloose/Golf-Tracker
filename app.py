@@ -1,213 +1,143 @@
 import streamlit as st
-import pandas as pd
 import requests
-import gspread
-from google.oauth2.service_account import Credentials
-from collections import Counter
+import pandas as pd
+from datetime import datetime
 from itertools import combinations
+from collections import Counter
 
-# --- 1. SETTINGS & STYLING ---
+# --- 1. SETTINGS ---
+YEAR = "2026"
+TOURN_ID = "100"  # The Open / British Open
+RAPID_API_KEY = "213c2f2306mshe3d8b437cc34999p108477jsn6f448fb2b30c"
+
 st.set_page_config(page_title="154th Open Championship Tracker", layout="wide")
 
-st.markdown("""
-    <style>
-    .main { background-color: #0B1221; color: #F1E9DB; }
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #1E293B;
-        border: 1px solid #D4AF37;
-        padding: 10px 20px;
-        color: #D4AF37;
-        font-weight: bold;
-    }
-    .stTabs [aria-selected="true"] { background-color: #D4AF37 !important; color: #0B1221 !important; }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- HELPER: UNICODE BOLD FOR DROPDOWNS ---
+# --- 2. HELPER FUNCTIONS ---
 def bold_text(text):
-    """Transforms standard text into Unicode Bold characters for UI display."""
-    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    bold_chars = "𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"
-    trans = str.maketrans(chars, bold_chars)
-    return text.translate(trans)
+    return f"**{text}**"
 
-# --- 2. AUTHENTICATION ---
-@st.cache_resource
-def get_sheet():
-    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    creds_dict = {
-        "type": st.secrets["connections"]["gsheets"]["type"],
-        "project_id": st.secrets["connections"]["gsheets"]["project_id"],
-        "private_key_id": st.secrets["connections"]["gsheets"]["private_key_id"],
-        "private_key": st.secrets["connections"]["gsheets"]["private_key"],
-        "client_email": st.secrets["connections"]["gsheets"]["client_email"],
-        "client_id": st.secrets["connections"]["gsheets"]["client_id"],
-        "auth_uri": st.secrets["connections"]["gsheets"]["auth_uri"],
-        "token_uri": st.secrets["connections"]["gsheets"]["token_uri"],
-        "auth_provider_x509_cert_url": st.secrets["connections"]["gsheets"]["auth_provider_x509_cert_url"],
-        "client_x509_cert_url": st.secrets["connections"]["gsheets"]["client_x509_cert_url"],
-    }
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-    client = gspread.authorize(creds)
-    return client.open("British Open Sheet").sheet1 
+def parse_score(val):
+    """Converts API values (None, 'E', '+1') into integers for math."""
+    if val is None or val == "" or val == "E": return 0
+    try: return int(str(val).replace('+', ''))
+    except: return 0
 
-# --- 3. CONFIG & FIELD DATA ---
-API_KEY = st.secrets["api_key"]
-YEAR, TOURN_ID = "2026", "100"
+def format_score_val(val):
+    """Converts integers back to display strings (0 becomes 'E')."""
+    if val == 0: return "E"
+    return f"+{val}" if val > 0 else str(val)
 
-OFFICIAL_FIELD = ["Scottie Scheffler", "Rory McIlroy", "Matt Fitzpatrick", "Cameron Young", "Russell Henley", "Chris Gotterup", "Collin Morikawa", "Wyndham Clark", "Tommy Fleetwood", "Justin Rose", "Jon Rahm", "Viktor Hovland", "J.J. Spaun", "Xander Schauffele", "Robert MacIntyre", "Ben Griffin", "Aaron Rai", "Sam Burns", "Justin Thomas", "Ludvig Aberg", "Si Woo Kim", "Tyrrell Hatton", "Sepp Straka", "Min Woo Lee", "Alex Noren", "Patrick Reed", "Kristoffer Reitan", "Ryan Gerard", "Akshay Bhatia", "Jacob Bridgeman", "Hideki Matsuyama", "Harris English", "Tom Kim", "JT Poston", "Nicolai Hojgaard", "Kurt Kitayama", "Bryson DeChambeau", "Patrick Cantlay", "Maverick McNealy", "Bud Cauley", "Keegan Bradley", "Rickie Fowler", "Gary Woodland", "Alex Smalley", "Jake Knapp", "Shane Lowry", "Sam Stevens", "Joaquin Niemann", "Daniel Berger", "Marco Penge", "Jordan Spieth", "Nicolas Echavarria", "Corey Conners", "Jason Day", "Michael Kim", "Ryan Fox", "Adam Scott", "Eugenio Chacarra", "Michael Brennan", "Pierceson Coody", "Ryo Hisatsune", "Matt McCarty", "Brian Harman", "Alex Fitzpatrick", "David Puig", "Nick Taylor", "Keith Mitchell", "Andrew Novak", "Michael Thorbjornsen", "Eric Cole", "Matt Wallace", "Sami Valimaki", "Max Homa", "Harry Hall", "Max Greyserman", "Jordan Smith", "Thomas Detry", "Sahith Theegala", "Casey Jarvis", "Jayden Schaper", "Sungjae Im", "Rasmus Hojgaard", "Keita Nakajima", "Rasmus Neergaard-Petersen", "Shaun Norris", "John Parry", "Lucas Herbert", "Daniel Hillier", "Haotong Li", "Kota Kaneko", "Angel Ayora", "Jackson Suber", "Brooks Koepka", "Hennie du Plessis", "Andy Sullivan", "Adrien Saddier", "Jose Luis Ballester", "Tom McKibbin", "Daniel Brown", "Cameron Smith", "Laurie Canter", "Travis Smyth", "Michael Hollick", "Scott Vincent", "Dan Bradbury", "Bernd Wiesberger", "Joakim Lagergren", "Victor Perez", "Jesper Svensson", "Billy Horschel", "Martin Couvra", "Kazuki Higa", "Peter Uihlein", "Alistair Docherty", "Kazuma Kobori", "Antoine Rozner", "Francesco Laporta", "MJ Daffue", "Francesco Molinari", "Ren Yonezawa", "Frederic Lacroix", "Cameron John", "James Nicholas", "Caleb Surratt", "Matthew Jordan", "Naoyuki Kataoka", "Sam Bairstow", "Austen Truslow", "Jeongwoo Ham", "Aldrich Potgieter", "Matthew Southgate", "Ryutaro Nagano", "Jiho Yang", "Padraig Harrington", "Jack Buchanan", "Marcus Plunkett", "Matthew Baldwin", "Tiger Christensen", "Henrik Stenson", "Stewart Cink", "Stuart Grehan", "Darren Clarke", "Alejandro De Castro Piera", "Baard Bjoernevik Skogen", "David Duval", "David Howard", "Fifa Laopakdee", "Jack McDonald", "Johnny Keefer", "Lev Grinberg", "Mason Howell", "Mateo Pulcini", "Nevill Ruiter", "Tim Wiedemeyer", "Tom Sloman"]
-
-ELITE_30 = OFFICIAL_FIELD[:30]
-WILDCARD_FIELD = OFFICIAL_FIELD[30:]
-
-# --- 4. DATA FETCHING ---
-@st.cache_data(ttl=900)
-def get_live_scores(year=YEAR, tourn_id=TOURN_ID):
+@st.cache_data(ttl=600)
+def get_live_scores():
+    url = "https://live-golf-data.p.rapidapi.com/leaderboard"
+    headers = {"X-RapidAPI-Key": RAPID_API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
+    params = {"orgId": "1", "tournId": TOURN_ID, "year": YEAR}
     try:
-        url = "https://live-golf-data.p.rapidapi.com/leaderboard"
-        headers = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
-        params = {"orgId": "1", "tournId": tourn_id, "year": year}
-        res = requests.get(url, headers=headers, params=params)
-        data = res.json()
-        return data.get('leaderboard') or data.get('leaderboardRows') or data.get('players') or []
-    except Exception as e:
-        st.sidebar.error(f"API Sync Error: {e}")
+        resp = requests.get(url, headers=headers, params=params).json()
+        return resp.get('leaderboardRows') or resp.get('leaderboard') or resp.get('players') or []
+    except:
         return []
 
-# --- 5. APP TABS ---
-st.title("🏆 154th Open Championship Tracker")
+# --- 3. THE TEAM DATA (RAW EXCEL) ---
+RAW_DATA = """
+User	P1	P2	P3
+Frederik	Rory McIlroy	Scottie Scheffler	Bryson DeChambeau
+Martin	Jon Rahm	Brooks Koepka	Viktor Hovland
+"""
 
-tab_reg, tab_lead, tab_intel, tab_field = st.tabs([
-    "✍️ Team Registration", 
-    "📊 Leaderboard", 
-    "🧠 Field Intelligence", 
-    "⛳ Official Master Board"
-])
+def get_teams(raw_str):
+    teams = {}
+    lines = raw_str.strip().split('\n')[1:]
+    for line in lines:
+        parts = line.split('\t')
+        if len(parts) >= 4:
+            teams[parts[0]] = [parts[1], parts[2], parts[3]]
+    return teams
 
-# TAB 1: REGISTRATION
-with tab_reg:
-    st.header("Enter Your Team")
-    user_name = st.text_input("Participant Name")
+TEAMS = get_teams(RAW_DATA)
+
+# --- 4. CSS STYLING ---
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@900&family=JetBrains+Mono&display=swap');
+    .main { background-color: #020617; color: #f8fafc; }
+    h1, h2, h3 { font-family: 'Inter', sans-serif; text-transform: uppercase; letter-spacing: -1px; }
+    .stTabs [data-baseweb="tab-list"] { background-color: #020617; border-bottom: 2px solid #EAB308; }
+    .stTabs [data-baseweb="tab"] { color: #94a3b8; font-family: 'JetBrains Mono'; }
+    .stTabs [aria-selected="true"] { color: #EAB308 !important; border-bottom: 2px solid #EAB308 !important; }
+</style>
+""", unsafe_content_as_html=True)
+
+# --- 5. DATA PROCESSING ---
+live_rows = get_live_scores()
+
+# Map scores with the new fallback logic
+score_map = {
+    f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower(): parse_score(r.get('totalToPar') or r.get('toPar') or 0) 
+    for r in live_rows
+}
+
+# --- 6. APP TABS ---
+tab1, tab2, tab3, tab4 = st.tabs(["SYNDICATE HUB", "LEADERBOARD", "FIELD INTEL", "OFFICIAL MASTER BOARD"])
+
+with tab1:
+    st.title("🏆 154TH OPEN CHAMPIONSHIP")
+    st.subheader("Royal Birkdale • 2026")
+    st.divider()
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
-        pick1 = st.selectbox(
-            "Player Choice 1", 
-            OFFICIAL_FIELD, 
-            format_func=lambda x: bold_text(x) if x in ELITE_30 else x
-        )
+        st.info("Tournament Status: Live Data Stream Active")
     with col2:
-        pick2 = st.selectbox(
-            "Player Choice 2", 
-            [p for p in OFFICIAL_FIELD if p != pick1], 
-            format_func=lambda x: bold_text(x) if x in ELITE_30 else x
-        )
-    with col3:
-        pick3 = st.selectbox(
-            "Wildcard Choice (Outside Top 30)", 
-            [p for p in WILDCARD_FIELD if p not in [pick1, pick2]]
-        )
+        st.success(f"Last Sync: {datetime.now().strftime('%H:%M:%S')}")
+
+with tab2:
+    st.header("SYNDICATE STANDINGS")
+    
+    standings = []
+    for user, roster in TEAMS.items():
+        total = 0
+        details = []
+        for p_name in roster:
+            s = score_map.get(p_name.lower(), 0)
+            total += s
+            details.append(f"{p_name} ({format_score_val(s)})")
         
-    if st.button("LOCK IN TEAM"):
-        if user_name:
-            try:
-                get_sheet().append_row([user_name, pick1, pick2, pick3])
-                st.success(f"Team Locked! Good luck, {user_name}.")
-                st.balloons()
-            except Exception as e:
-                st.error(f"Submission Failed: {e}")
-        else:
-            st.warning("Please provide a name for the entry.")
+        standings.append({
+            "User": user,
+            "Total": total,
+            "Roster": " • ".join(details)
+        })
+    
+    df_standings = pd.DataFrame(standings).sort_values("Total")
+    df_standings.insert(0, "Rank", range(1, len(df_standings) + 1))
+    st.table(df_standings)
 
-# TAB 2: LEADERBOARD
-with tab_lead:
-    st.header("Standings")
-    try:
-        live_rows = get_live_scores(YEAR, TOURN_ID)
-        score_map = {f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower(): r.get('totalToPar', 0) for r in live_rows}
-        
-        entries = get_sheet().get_all_records()
-        if entries:
-            final_data = []
-            for entry in entries:
-                s1 = score_map.get(str(entry['P1']).lower(), 0)
-                s2 = score_map.get(str(entry['P2']).lower(), 0)
-                s3 = score_map.get(str(entry['P3']).lower(), 0)
-                
-                final_data.append({
-                    "User": entry['User'],
-                    "P1": f"{entry['P1']} ({s1})",
-                    "P2": f"{entry['P2']} ({s2})",
-                    "P3": f"{entry['P3']} ({s3})",
-                    "Total Score": s1 + s2 + s3
-                })
-            
-            df_standings = pd.DataFrame(final_data).sort_values("Total Score")
-            
-            # --- NUMBERING FOR LIVE STANDINGS ---
-            df_standings.insert(0, 'Rank', range(1, 1 + len(df_standings)))
-            
-            st.subheader("Entries per Participant")
-            entry_counts = df_standings['User'].value_counts().reset_index()
-            entry_counts.columns = ['Participant', 'Total Entries']
-            st.table(entry_counts)
-            
-            st.subheader("Live Standings")
-            st.dataframe(df_standings, hide_index=True, use_container_width=True)
-        else:
-            st.info("No entries found in the Google Sheet.")
-    except Exception as e:
-        st.error(f"Failed to load leaderboard: {e}")
+with tab3:
+    st.header("FIELD INTELLIGENCE")
+    all_picks = [p for roster in TEAMS.values() for p in roster]
+    counts = Counter(all_picks).most_common(10)
+    
+    st.subheader("Most Selected Players")
+    intel_df = pd.DataFrame(counts, columns=["Player", "Picks"])
+    intel_df.insert(0, "Rank", range(1, len(intel_df) + 1))
+    st.table(intel_df)
 
-# TAB 3: FIELD INTELLIGENCE
-with tab_intel:
-    st.header("Trends & Analysis")
-    try:
-        entries = get_sheet().get_all_records()
-        if entries:
-            all_picks, triplets, duos = [], [], []
-            for row in entries:
-                team = sorted([row['P1'], row['P2'], row['P3']])
-                all_picks.extend(team)
-                triplets.append(tuple(team))
-                duos.extend(list(combinations(team, 2)))
-            
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.subheader("Most Selected Players")
-                df_picks = pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections'])
-                # --- NUMBERING ---
-                df_picks.insert(0, '#', range(1, 1 + len(df_picks)))
-                st.dataframe(df_picks, hide_index=True)
-                
-            with col_b:
-                st.subheader("Most Popular Pairs")
-                df_duos = pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)])
-                # --- NUMBERING ---
-                df_duos.insert(0, '#', range(1, 1 + len(df_duos)))
-                st.dataframe(df_duos, hide_index=True)
-
-            st.subheader("Identical Teams")
-            df_trips = pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)])
-            # --- NUMBERING ---
-            df_trips.insert(0, '#', range(1, 1 + len(df_trips)))
-            st.dataframe(df_trips, hide_index=True, use_container_width=True)
-            
-    except Exception as e:
-        st.error(f"Intelligence Error: {e}")
-
-# TAB 4: OFFICIAL MASTER BOARD
-with tab_field:
-    st.header("Official 154th Open Leaderboard")
-    live_rows = get_live_scores()
-    if live_rows:
-        master_data = [{
-            "Pos": r.get('position'), 
-            "Golfer": f"{r.get('firstName')} {r.get('lastName')}", 
-            "Thru": r.get('thru'), 
-            "Score": format_score_val(parse_score(r.get('totalToPar') or r.get('toPar') or 0)),
-        } for r in live_rows]
-        st.dataframe(pd.DataFrame(master_data), hide_index=True, use_container_width=True)
+with tab4:
+    st.header("OFFICIAL MASTER BOARD")
+    if not live_rows:
+        st.warning("Waiting for tournament data...")
     else:
-        st.info("Official scores will appear here when play begins.")
+        master_list = []
+        for r in live_rows:
+            master_list.append({
+                "Pos": r.get('position', '-'),
+                "Player": f"{r.get('firstName', '')} {r.get('lastName', '')}".strip(),
+                "Thru": r.get('thru', 'F'),
+                "Score": format_score_val(parse_score(r.get('totalToPar') or r.get('toPar') or 0))
+            })
+        
+        st.dataframe(pd.DataFrame(master_list), use_container_width=True, hide_index=True)
+
+st.sidebar.markdown("---")
+st.sidebar.write("Sync Frequency: 10 mins")
