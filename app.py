@@ -206,7 +206,7 @@ with tab_field:
             "Pos": r.get('position'), 
             "Golfer": f"{r.get('firstName')} {r.get('lastName')}", 
             "Thru": r.get('thru'), 
-            "Score": format_score(parse_score(r.get('totalToPar') or r.get('toPar') or 0)),
+            "Score": format_score_val(parse_score(r.get('totalToPar') or r.get('toPar') or 0)),
         } for r in live_rows]
         st.dataframe(pd.DataFrame(master_data), hide_index=True, use_container_width=True)
     else:
