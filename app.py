@@ -97,7 +97,7 @@ with tab_lead:
         if raw_entries:
             final_data = []
             
-            # Identify the correct keys dynamically (Smart Header Finder)
+            # Identify the correct keys dynamically
             sample = raw_entries[0]
             k_user = next((k for k in sample.keys() if 'user' in str(k).lower()), None)
             k_p1 = next((k for k in sample.keys() if 'p1' in str(k).lower()), None)
@@ -110,7 +110,7 @@ with tab_lead:
                 p2_name = str(entry.get(k_p2, "")).strip() if k_p2 else ""
                 p3_name = str(entry.get(k_p3, "")).strip() if k_p3 else ""
 
-                if not p1_name and not p2_name: continue # Skip empty rows
+                if not p1_name and not p2_name: continue 
 
                 s1 = score_map.get(p1_name.lower(), 0)
                 s2 = score_map.get(p2_name.lower(), 0)
@@ -129,21 +129,34 @@ with tab_lead:
                 })
             
             if final_data:
-                df_standings = pd.DataFrame(final_data).sort_values("Total Score")
-                df_standings.insert(0, 'Rank', range(1, 1 + len(df_standings)))
+                df_standings = pd.DataFrame(final_data)
                 
+                # Standard Golf Ranking (Ties get same rank, e.g. 1, 1, 3)
+                df_standings['Rank'] = df_standings['Total Score'].rank(method='min', ascending=True).astype(int)
+                df_standings = df_standings.sort_values("Total Score")
+                
+                # Reorder columns to put Rank first
+                cols = ['Rank', 'User', 'P1', 'P2', 'P3', 'Total Score']
+                df_standings = df_standings[cols]
+
                 st.subheader("Live Leaderboard")
+                
+                # Format Total Score column for display
                 df_display = df_standings.copy()
                 df_display['Total Score'] = df_display['Total Score'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
-                st.dataframe(df_display, hide_index=True, use_container_width=True)
                 
-                st.subheader("Participation Summary")
-                entry_counts = df_standings['User'].value_counts().reset_index()
-                entry_counts.columns = ['Participant', 'Total Entries']
-                entry_counts.index = entry_counts.index + 1 # Number from 1
-                st.table(entry_counts)
+                # Display with column width configuration
+                st.dataframe(
+                    df_display, 
+                    hide_index=True, 
+                    use_container_width=True,
+                    column_config={
+                        "Rank": st.column_config.NumberColumn("Rank", width="small"),
+                        "Total Score": st.column_config.TextColumn("Total Score", width="small")
+                    }
+                )
             else:
-                st.warning("Data found, but players were blank. Check your Sheet columns.")
+                st.warning("Data found, but players were blank.")
         else:
             st.info("No entries found in the Google Sheet.")
     except Exception as e:
@@ -164,7 +177,7 @@ with tab_field:
                 "Score": s
             })
         df_master = pd.DataFrame(master_data)
-        df_master.index = df_master.index + 1 # Number from 1
+        df_master.index = df_master.index + 1 
         st.dataframe(df_master, use_container_width=True)
 
 # TAB 3: FIELD INTELLIGENCE
@@ -206,7 +219,7 @@ with tab_intel:
             df_trips.insert(0, '#', range(1, 1 + len(df_trips)))
             st.dataframe(df_trips, hide_index=True, use_container_width=True)
     except:
-        st.info("Waiting for more entries to analyze trends.")
+        st.info("Waiting for more entries.")
 
 # TAB 4: REGISTRY DATA
 with tab_data:
@@ -215,7 +228,7 @@ with tab_data:
         entries = get_sheet().get_all_records()
         if entries:
             df_raw = pd.DataFrame(entries)
-            df_raw.index = df_raw.index + 1 # Number from 1
+            df_raw.index = df_raw.index + 1 
             st.dataframe(df_raw, use_container_width=True)
     except:
         st.error("Could not fetch registry data.")
