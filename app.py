@@ -125,13 +125,21 @@ with tab_lead:
     try:
         live_rows = get_live_scores()
         
-        # --- FIXED SCORE MAPPING ---
+        # --- ROBUST SCORE MAPPING (Fixed for Live Play) ---
         score_map = {}
         for r in live_rows:
             full_name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower()
-            # Try totalToPar, fallback to toPar, default to 0
-            raw_val = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('toPar', 0)
-            score_map[full_name] = raw_val
+            
+            # 1. Try totalToPar
+            s = r.get('totalToPar')
+            # 2. Try toPar if totalToPar is None
+            if s is None:
+                s = r.get('toPar')
+            # 3. If play is live and scores are returning 0/None, check rounds array
+            if (s is None or s == 0) and r.get('rounds'):
+                s = sum(rd.get('scoreToPar', 0) for rd in r.get('rounds') if rd.get('scoreToPar') is not None)
+            
+            score_map[full_name] = s if s is not None else 0
         
         entries = get_sheet().get_all_records()
         if entries:
@@ -141,7 +149,7 @@ with tab_lead:
                 s2 = score_map.get(str(entry['P2']).lower(), 0)
                 s3 = score_map.get(str(entry['P3']).lower(), 0)
                 
-                # Format individual scores for display (0 -> E)
+                # Format for display (0 -> E)
                 d1 = "E" if s1 == 0 else s1
                 d2 = "E" if s2 == 0 else s2
                 d3 = "E" if s3 == 0 else s3
@@ -163,7 +171,6 @@ with tab_lead:
             st.table(entry_counts)
             
             st.subheader("Live Standings")
-            # Convert final total 0 to 'E' for display in the table
             df_display = df_standings.copy()
             df_display['Total Score'] = df_display['Total Score'].apply(lambda x: "E" if x == 0 else x)
             st.dataframe(df_display, hide_index=True, use_container_width=True)
@@ -194,12 +201,12 @@ with tab_intel:
                 
             with col_b:
                 st.subheader("Most Popular Pairs")
-                df_duos = pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)])
+                df_duos = pd.DataFrame([{"Pair": f"{d[0]} & {d[1](https://slashgolf.dev/quickstart.html "inline-citation")}", "Count": c} for d, c in Counter(duos).most_common(5)])
                 df_duos.insert(0, '#', range(1, 1 + len(df_duos)))
                 st.dataframe(df_duos, hide_index=True)
 
             st.subheader("Identical Teams")
-            df_trips = pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)])
+            df_trips = pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1](https://slashgolf.dev/quickstart.html "inline-citation")}, {t[2](https://slashgolf.dev/ "inline-citation")}", "Count": c} for t, c in Counter(triplets).most_common(5)])
             df_trips.insert(0, '#', range(1, 1 + len(df_trips)))
             st.dataframe(df_trips, hide_index=True, use_container_width=True)
             
@@ -213,9 +220,14 @@ with tab_field:
     if live_rows:
         master_data = []
         for r in live_rows:
-            # Check both score keys
-            s = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('toPar', 0)
-            display_score = "E" if s == 0 else s
+            # Multi-key check for Master Board display
+            s = r.get('totalToPar')
+            if s is None:
+                s = r.get('toPar')
+            if (s is None or s == 0) and r.get('rounds'):
+                s = sum(rd.get('scoreToPar', 0) for rd in r.get('rounds') if rd.get('scoreToPar') is not None)
+                
+            display_score = "E" if (s == 0 or s is None) else s
             
             master_data.append({
                 "Pos": r.get('position'), 
