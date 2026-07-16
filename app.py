@@ -104,21 +104,30 @@ with tab_lead:
                     "P1": f"{p1_name} ({'E' if scores[0]==0 else (f'+{scores[0]}' if scores[0]>0 else scores[0])})",
                     "P2": f"{p2_name} ({'E' if scores[1]==0 else (f'+{scores[1]}' if scores[1]>0 else scores[1])})",
                     "P3": f"{p3_name} ({'E' if scores[2]==0 else (f'+{scores[2]}' if scores[2]>0 else scores[2])})",
-                    "Total": sum(scores)
+                    "TotalInt": sum(scores)
                 })
             
             df_standings = pd.DataFrame(final_data)
-            df_standings['Rank'] = df_standings['Total'].rank(method='min', ascending=True).astype(int)
-            df_standings = df_standings.sort_values("Total")[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']]
-            df_standings['Total'] = df_standings['Total'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
-
+            df_standings = df_standings.sort_values("TotalInt")
+            
+            # Unique Ranking (1, 2, 3... no same ranks for ties)
+            df_standings.insert(0, 'Rank', range(1, 1 + len(df_standings)))
+            
+            # Format display score
+            df_standings['Total'] = df_standings['TotalInt'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
+            
+            display_cols = ['Rank', 'User', 'P1', 'P2', 'P3', 'Total']
             st.dataframe(
-                df_standings, 
+                df_standings[display_cols], 
                 hide_index=True, 
                 use_container_width=True,
                 column_config={
-                    "Rank": st.column_config.NumberColumn("Rank", width=50),
-                    "Total": st.column_config.TextColumn("Total", width=70)
+                    "Rank": st.column_config.NumberColumn("Rank", width=40),
+                    "User": st.column_config.TextColumn("User", width="medium"),
+                    "P1": st.column_config.TextColumn("P1", width="large"),
+                    "P2": st.column_config.TextColumn("P2", width="large"),
+                    "P3": st.column_config.TextColumn("P3", width="large"),
+                    "Total": st.column_config.TextColumn("Total", width=60)
                 }
             )
     except Exception as e:
@@ -135,8 +144,10 @@ with tab_field:
             hide_index=True, 
             use_container_width=True,
             column_config={
-                "Pos": st.column_config.TextColumn("Pos", width=50),
-                "Score": st.column_config.TextColumn("Score", width=70)
+                "Pos": st.column_config.TextColumn("Pos", width=40),
+                "Golfer": st.column_config.TextColumn("Golfer", width="large"),
+                "Thru": st.column_config.TextColumn("Thru", width=60),
+                "Score": st.column_config.TextColumn("Score", width=60)
             }
         )
 
@@ -147,9 +158,9 @@ with tab_intel:
         raw_entries = get_sheet().get_all_records()
         if raw_entries:
             sample = raw_entries[0]
-            k_p1 = next((k for k in sample.keys() if 'p1' in str(k).lower()), None)
-            k_p2 = next((k for k in sample.keys() if 'p2' in str(k).lower()), None)
-            k_p3 = next((k for k in sample.keys() if 'p3' in str(k).lower()), None)
+            k_p1 = next((k for k in sample.keys() if 'p1' in str(k).lower()), "P1")
+            k_p2 = next((k for k in sample.keys() if 'p2' in str(k).lower()), "P2")
+            k_p3 = next((k for k in sample.keys() if 'p3' in str(k).lower()), "P3")
 
             all_picks, triplets, duos = [], [], []
             for row in raw_entries:
@@ -188,8 +199,7 @@ with tab_data:
         entries = get_sheet().get_all_records()
         if entries:
             df_raw = pd.DataFrame(entries)
-            # Start index at 1
-            df_raw.index = df_raw.index + 1
+            df_raw.index = range(1, 1 + len(df_raw)) # Force start at 1
             
             search_query = st.text_input("🔍 Search by User or Player Name", "").lower()
             
