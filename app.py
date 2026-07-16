@@ -21,6 +21,8 @@ st.markdown("""
         font-weight: bold;
     }
     .stTabs [aria-selected="true"] { background-color: #D4AF37 !important; color: #0B1221 !important; }
+    /* Global table tightening */
+    [data-testid="stDataFrame"] { border: 1px solid #1E293B; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -109,25 +111,20 @@ with tab_lead:
             
             df_standings = pd.DataFrame(final_data)
             df_standings = df_standings.sort_values("TotalInt")
-            
-            # Unique Ranking (1, 2, 3... no same ranks for ties)
             df_standings.insert(0, 'Rank', range(1, 1 + len(df_standings)))
-            
-            # Format display score
             df_standings['Total'] = df_standings['TotalInt'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
             
-            display_cols = ['Rank', 'User', 'P1', 'P2', 'P3', 'Total']
             st.dataframe(
-                df_standings[display_cols], 
+                df_standings[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], 
                 hide_index=True, 
                 use_container_width=True,
                 column_config={
-                    "Rank": st.column_config.NumberColumn("Rank", width=40),
-                    "User": st.column_config.TextColumn("User", width="medium"),
-                    "P1": st.column_config.TextColumn("P1", width="large"),
-                    "P2": st.column_config.TextColumn("P2", width="large"),
-                    "P3": st.column_config.TextColumn("P3", width="large"),
-                    "Total": st.column_config.TextColumn("Total", width=60)
+                    "Rank": st.column_config.NumberColumn("Rank", width=30, help="Position"),
+                    "User": st.column_config.TextColumn("User"), # Absorbs space
+                    "P1": st.column_config.TextColumn("P1"), # Absorbs space
+                    "P2": st.column_config.TextColumn("P2"), # Absorbs space
+                    "P3": st.column_config.TextColumn("P3"), # Absorbs space
+                    "Total": st.column_config.TextColumn("Total", width=40)
                 }
             )
     except Exception as e:
@@ -144,10 +141,10 @@ with tab_field:
             hide_index=True, 
             use_container_width=True,
             column_config={
-                "Pos": st.column_config.TextColumn("Pos", width=40),
-                "Golfer": st.column_config.TextColumn("Golfer", width="large"),
-                "Thru": st.column_config.TextColumn("Thru", width=60),
-                "Score": st.column_config.TextColumn("Score", width=60)
+                "Pos": st.column_config.TextColumn("Pos", width=30),
+                "Golfer": st.column_config.TextColumn("Golfer"), # Greedy column
+                "Thru": st.column_config.TextColumn("Thru", width=50),
+                "Score": st.column_config.TextColumn("Score", width=50)
             }
         )
 
@@ -177,18 +174,18 @@ with tab_intel:
                 st.subheader("Most Selected Players")
                 df_picks = pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections'])
                 df_picks.insert(0, '#', range(1, 1 + len(df_picks)))
-                st.dataframe(df_picks, hide_index=True, use_container_width=True)
+                st.dataframe(df_picks, hide_index=True, use_container_width=True, column_config={"#": st.column_config.NumberColumn(width=30)})
                 
             with col_b:
                 st.subheader("Most Popular Pairs")
                 df_duos = pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)])
                 df_duos.insert(0, '#', range(1, 1 + len(df_duos)))
-                st.dataframe(df_duos, hide_index=True, use_container_width=True)
+                st.dataframe(df_duos, hide_index=True, use_container_width=True, column_config={"#": st.column_config.NumberColumn(width=30)})
 
             st.subheader("Identical Teams")
             df_trips = pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)])
             df_trips.insert(0, '#', range(1, 1 + len(df_trips)))
-            st.dataframe(df_trips, hide_index=True, use_container_width=True)
+            st.dataframe(df_trips, hide_index=True, use_container_width=True, column_config={"#": st.column_config.NumberColumn(width=30)})
     except:
         st.info("Gathering more data for analysis...")
 
@@ -199,7 +196,8 @@ with tab_data:
         entries = get_sheet().get_all_records()
         if entries:
             df_raw = pd.DataFrame(entries)
-            df_raw.index = range(1, 1 + len(df_raw)) # Force start at 1
+            # Reindex starting at 1
+            df_raw.insert(0, '#', range(1, 1 + len(df_raw)))
             
             search_query = st.text_input("🔍 Search by User or Player Name", "").lower()
             
@@ -209,6 +207,11 @@ with tab_data:
             else:
                 df_filtered = df_raw
 
-            st.dataframe(df_filtered, use_container_width=True)
+            st.dataframe(
+                df_filtered, 
+                hide_index=True, 
+                use_container_width=True,
+                column_config={"#": st.column_config.NumberColumn(width=30)}
+            )
     except:
         st.error("Could not fetch registry data.")
