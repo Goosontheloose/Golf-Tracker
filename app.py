@@ -124,12 +124,15 @@ with tab_lead:
     st.header("Standings")
     try:
         live_rows = get_live_scores()
+        
+        # --- FIXED SCORE MAPPING ---
         score_map = {}
-for r in live_rows:
-    full_name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower()
-    # Check 'totalToPar', then 'toPar', default to 0 if both are None/missing
-    raw_score = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('toPar', 0)
-    score_map[full_name] = raw_score
+        for r in live_rows:
+            full_name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower()
+            # Try totalToPar, fallback to toPar, default to 0
+            raw_val = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('toPar', 0)
+            score_map[full_name] = raw_val
+        
         entries = get_sheet().get_all_records()
         if entries:
             final_data = []
@@ -138,17 +141,20 @@ for r in live_rows:
                 s2 = score_map.get(str(entry['P2']).lower(), 0)
                 s3 = score_map.get(str(entry['P3']).lower(), 0)
                 
+                # Format individual scores for display (0 -> E)
+                d1 = "E" if s1 == 0 else s1
+                d2 = "E" if s2 == 0 else s2
+                d3 = "E" if s3 == 0 else s3
+                
                 final_data.append({
                     "User": entry['User'],
-                    "P1": f"{entry['P1']} ({s1})",
-                    "P2": f"{entry['P2']} ({s2})",
-                    "P3": f"{entry['P3']} ({s3})",
+                    "P1": f"{entry['P1']} ({d1})",
+                    "P2": f"{entry['P2']} ({d2})",
+                    "P3": f"{entry['P3']} ({d3})",
                     "Total Score": s1 + s2 + s3
                 })
             
             df_standings = pd.DataFrame(final_data).sort_values("Total Score")
-            
-            # --- NUMBERING FOR LIVE STANDINGS ---
             df_standings.insert(0, 'Rank', range(1, 1 + len(df_standings)))
             
             st.subheader("Entries per Participant")
@@ -157,7 +163,10 @@ for r in live_rows:
             st.table(entry_counts)
             
             st.subheader("Live Standings")
-            st.dataframe(df_standings, hide_index=True, use_container_width=True)
+            # Convert final total 0 to 'E' for display in the table
+            df_display = df_standings.copy()
+            df_display['Total Score'] = df_display['Total Score'].apply(lambda x: "E" if x == 0 else x)
+            st.dataframe(df_display, hide_index=True, use_container_width=True)
         else:
             st.info("No entries found in the Google Sheet.")
     except Exception as e:
@@ -180,20 +189,17 @@ with tab_intel:
             with col_a:
                 st.subheader("Most Selected Players")
                 df_picks = pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections'])
-                # --- NUMBERING ---
                 df_picks.insert(0, '#', range(1, 1 + len(df_picks)))
                 st.dataframe(df_picks, hide_index=True)
                 
             with col_b:
                 st.subheader("Most Popular Pairs")
                 df_duos = pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)])
-                # --- NUMBERING ---
                 df_duos.insert(0, '#', range(1, 1 + len(df_duos)))
                 st.dataframe(df_duos, hide_index=True)
 
             st.subheader("Identical Teams")
             df_trips = pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)])
-            # --- NUMBERING ---
             df_trips.insert(0, '#', range(1, 1 + len(df_trips)))
             st.dataframe(df_trips, hide_index=True, use_container_width=True)
             
@@ -205,19 +211,18 @@ with tab_field:
     st.header("Official 154th Open Leaderboard")
     live_rows = get_live_scores()
     if live_rows:
-       master_data = []
-for r in live_rows:
-    # Get score from either key
-    s = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('toPar', 0)
-    # Convert 0 to 'E' for display
-    display_score = "E" if s == 0 else s
-    
-    master_data.append({
-        "Pos": r.get('position'), 
-        "Golfer": f"{r.get('firstName')} {r.get('lastName')}", 
-        "Thru": r.get('thru'), 
-        "Score": display_score
-    })
+        master_data = []
+        for r in live_rows:
+            # Check both score keys
+            s = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('toPar', 0)
+            display_score = "E" if s == 0 else s
+            
+            master_data.append({
+                "Pos": r.get('position'), 
+                "Golfer": f"{r.get('firstName')} {r.get('lastName')}", 
+                "Thru": r.get('thru'), 
+                "Score": display_score
+            })
         st.dataframe(pd.DataFrame(master_data), hide_index=True, use_container_width=True)
     else:
         st.info("Official scores will appear here when play begins.")
