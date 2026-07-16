@@ -24,7 +24,17 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. AUTHENTICATION ---
+# --- 2. TOP 30 REFERENCE (JULY 2026) ---
+TOP_30 = [
+    "Scottie Scheffler", "Rory McIlroy", "Xander Schauffele", "Ludvig Aberg", "Wyndham Clark",
+    "Viktor Hovland", "Collin Morikawa", "Patrick Cantlay", "Bryson DeChambeau", "Jon Rahm",
+    "Tommy Fleetwood", "Brooks Koepka", "Matt Fitzpatrick", "Jordan Spieth", "Max Homa",
+    "Hideki Matsuyama", "Sahith Theegala", "Tyrrell Hatton", "Cameron Smith", "Keegan Bradley",
+    "Tommy Fleetwood", "Jason Day", "Tom Kim", "Tony Finau", "Brian Harman", 
+    "Sungjae Im", "Russell Henley", "Justin Thomas", "Shane Lowry", "Min Woo Lee"
+]
+
+# --- 3. AUTHENTICATION ---
 @st.cache_resource
 def get_sheet():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -44,11 +54,11 @@ def get_sheet():
     client = gspread.authorize(creds)
     return client.open("British Open Sheet").sheet1 
 
-# --- 3. CONFIG ---
+# --- 4. CONFIG ---
 API_KEY = st.secrets["api_key"]
 YEAR, TOURN_ID = "2026", "100"
 
-# --- 4. DATA FETCHING ---
+# --- 5. DATA FETCHING ---
 @st.cache_data(ttl=900)
 def get_live_scores():
     try:
@@ -60,7 +70,7 @@ def get_live_scores():
     except Exception as e:
         return []
 
-# --- 5. APP TABS ---
+# --- 6. APP TABS ---
 st.title("🏆 154th Open Championship Tracker")
 
 tab_lead, tab_field, tab_intel, tab_data = st.tabs([
@@ -75,7 +85,12 @@ with tab_lead:
     st.header("Tournament Standings")
     try:
         live_rows = get_live_scores()
-        score_map = {f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower(): r.get('total', 'E') for r in live_rows}
+        score_map = {}
+        for r in live_rows:
+            full_name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
+            # Fallback for scores
+            s = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('total', 'E')
+            score_map[full_name.lower()] = s
         
         raw_entries = get_sheet().get_all_records()
         if raw_entries:
@@ -117,9 +132,6 @@ with tab_lead:
                 column_config={
                     "Rank": st.column_config.NumberColumn("Rank", width=35),
                     "User": st.column_config.TextColumn("User", width="medium"),
-                    "P1": st.column_config.TextColumn("P1", width="large"),
-                    "P2": st.column_config.TextColumn("P2", width="large"),
-                    "P3": st.column_config.TextColumn("P3", width="large"),
                     "Total": st.column_config.TextColumn("Total", width=50)
                 }
             )
@@ -131,7 +143,7 @@ with tab_field:
     st.header("Official 154th Open Leaderboard")
     live_rows = get_live_scores()
     if live_rows:
-        master_data = [{"Pos": r.get('position'), "Golfer": f"{r.get('firstName')} {r.get('lastName')}", "Thru": r.get('thru'), "Score": r.get('total', 'E')} for r in live_rows]
+        master_data = [{"Pos": r.get('position'), "Golfer": f"{r.get('firstName')} {r.get('lastName')}", "Thru": r.get('thru'), "Score": r.get('totalToPar') if r.get('totalToPar') is not None else r.get('total', 'E')} for r in live_rows]
         st.dataframe(
             pd.DataFrame(master_data), 
             hide_index=True, 
@@ -147,6 +159,44 @@ with tab_field:
 # TAB 3: FIELD INTELLIGENCE
 with tab_intel:
     st.header("Trends & Analysis")
+    live_rows = get_live_scores()
+    
+    # 1. PERFECT ROSTER CALCULATION
+    if live_rows:
+        try:
+            pro_scores = []
+            for r in live_rows:
+                name = f"{r.get('firstName')} {r.get('lastName')}".strip()
+                s = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('total', 'E')
+                try: 
+                    val = int(str(s).replace('+', '')) if s not in ['E', 'Even', '-', ''] else 0
+                except: 
+                    val = 0
+                pro_scores.append({"name": name, "score": val, "is_elite": name in TOP_30})
+            
+            df_pro = pd.DataFrame(pro_scores).sort_values("score")
+            
+            # Constraint: At least 1 player must be outside top 30
+            wildcards = df_pro[df_pro['is_elite'] == False]
+            if not wildcards.empty:
+                best_wildcard = wildcards.iloc[0]
+                # Best 2 others from the remaining field
+                others = df_pro[df_pro['name'] != best_wildcard['name']].iloc[:2]
+                perfect_team = [best_wildcard] + others.to_dict('records')
+                perfect_score = sum([p['score'] for p in perfect_team])
+                perfect_score_fmt = "E" if perfect_score == 0 else (f"+{perfect_score}" if perfect_score > 0 else perfect_score)
+                
+                st.subheader("💎 The Perfect Roster")
+                st.info(f"The best possible score currently is **{perfect_score_fmt}** using:")
+                cols = st.columns(3)
+                for i, p in enumerate(perfect_team):
+                    tag = " (Wildcard)" if not p['is_elite'] else " (Elite)"
+                    score_tag = "E" if p['score'] == 0 else (f"+{p['score']}" if p['score'] > 0 else p['score'])
+                    cols[i].metric(label=f"Player {i+1}{tag}", value=p['name'], delta=f"Score: {score_tag}", delta_color="inverse")
+        except:
+            pass
+
+    # 2. PICK TRENDS
     try:
         raw_entries = get_sheet().get_all_records()
         if raw_entries:
@@ -162,6 +212,7 @@ with tab_intel:
                 triplets.append(tuple(team))
                 duos.extend(list(combinations(team, 2)))
             
+            st.divider()
             col_a, col_b = st.columns(2)
             with col_a:
                 st.subheader("Most Selected Players")
@@ -178,7 +229,6 @@ with tab_intel:
             st.subheader("Identical Teams")
             df_trips = pd.DataFrame([{"Full Roster": f"{t[0]}, {t[1]}, {t[2]}", "Count": c} for t, c in Counter(triplets).most_common(5)])
             df_trips.insert(0, '#', range(1, 1 + len(df_trips)))
-            df_trips.index = range(1, 1 + len(df_trips))
             st.dataframe(df_trips, hide_index=True, use_container_width=True, column_config={"#": st.column_config.NumberColumn(width=35)})
     except:
         st.info("Gathering more data for analysis...")
