@@ -63,7 +63,7 @@ WILDCARD_FIELD = OFFICIAL_FIELD[30:]
 
 # --- 4. DATA FETCHING ---
 @st.cache_data(ttl=900)
-def get_live_scores(year=YEAR, TOURN_ID):
+def get_live_scores(year=YEAR, tourn_id=TOURN_ID):
     try:
         url = "https://live-golf-data.p.rapidapi.com/leaderboard"
         headers = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
