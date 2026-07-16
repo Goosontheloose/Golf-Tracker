@@ -69,7 +69,8 @@ def get_live_scores():
         headers = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
         params = {"orgId": "1", "tournId": TOURN_ID, "year": YEAR}
         res = requests.get(url, headers=headers, params=params)
-        return res.json().get('leaderboardRows', [])
+        data = res.json()
+        return data.get('leaderboard') or data.get('leaderboardRows') or data.get('players') or []
     except Exception as e:
         st.sidebar.error(f"API Sync Error: {e}")
         return []
