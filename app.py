@@ -59,7 +59,7 @@ API_KEY = st.secrets["api_key"]
 YEAR, TOURN_ID = "2026", "100"
 
 # --- 5. DATA FETCHING ---
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=600)
 def get_live_scores():
     try:
         url = "https://live-golf-data.p.rapidapi.com/leaderboard"
@@ -157,22 +157,25 @@ with tab_round:
             name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
             s_val = None
             
-            # Check if selected round is currently LIVE
+            # --- DEFENSIVE MULTI-KEY SEARCH ---
+            # 1. Check if this is the ACTIVE round
             if str(r.get('currentRound')) == str(target_num):
                 s_val = r.get('currentRoundScore')
             
-            # Check historical rounds in the list
+            # 2. Check the rounds array (searching for roundNum OR roundId)
             if s_val is None:
                 for rd in r.get('rounds', []):
-                    if str(rd.get('roundId')) == str(target_num - 1) or str(rd.get('roundNum')) == str(target_num):
-                        s_val = rd.get('scoreToPar')
+                    # We check for roundNum=1 OR roundId=0 for Round 1
+                    if str(rd.get('roundNum')) == str(target_num) or str(rd.get('roundId')) == str(target_num - 1):
+                        # Try every possible score key used by this API
+                        s_val = rd.get('scoreToPar', rd.get('score_to_par', rd.get('today')))
                         break
 
             if s_val is not None and str(s_val).lower() != 'none':
                 pro_round_scores.append({"name": name, "score": parse_score_to_int(s_val)})
         
-        st.subheader(f"🏆 Top 3 Professionals: {selected_round}")
         if pro_round_scores:
+            st.subheader(f"🏆 Top 3 Professionals: {selected_round}")
             top_3_rd = sorted(pro_round_scores, key=lambda x: x['score'])[:3]
             cols = st.columns(3)
             for i, p in enumerate(top_3_rd):
@@ -197,6 +200,9 @@ with tab_round:
             st.dataframe(df_burners.head(10), hide_index=True, use_container_width=True)
         else:
             st.warning(f"No score data found for {selected_round}.")
+            with st.expander("🛠️ Live Data Diagnostic (Click to see why keys aren't matching)"):
+                st.write("First Player Data keys:", list(live_rows[0].keys()))
+                st.write("First Player Full JSON:", live_rows[0])
 
 # TAB 4: FIELD INTELLIGENCE
 with tab_intel:
