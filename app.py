@@ -94,7 +94,8 @@ with tab_lead:
         score_map = {}
         for r in live_rows:
             name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip().lower()
-            val = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('total', 'E')
+            # In your image, 'total' is the key for the tournament score
+            val = r.get('total', 'E')
             score_map[name] = val
         
         raw_entries = get_sheet().get_all_records()
@@ -131,7 +132,7 @@ with tab_field:
         pro_list = []
         for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
-            s = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('total', 'E')
+            s = r.get('total', 'E')
             pro_list.append({"name": name, "score": parse_score_to_int(s), "thru": r.get('thru'), "pos": r.get('position')})
         
         top_5 = sorted(pro_list, key=lambda x: x['score'])[:5]
@@ -141,7 +142,7 @@ with tab_field:
             cols[i].metric(label=f"{p['pos']} | Thru: {p['thru']}", value=p['name'], delta=f"Score: {score_fmt}", delta_color="inverse")
 
         st.divider()
-        master_df = pd.DataFrame([{"Pos": r.get('position'), "Golfer": f"{r.get('firstName')} {r.get('lastName')}", "Thru": r.get('thru'), "Score": r.get('totalToPar') if r.get('totalToPar') is not None else r.get('total', 'E')} for r in live_rows])
+        master_df = pd.DataFrame([{"Pos": r.get('position'), "Golfer": f"{r.get('firstName')} {r.get('lastName')}", "Thru": r.get('thru'), "Score": r.get('total', 'E')} for r in live_rows])
         st.dataframe(master_df, hide_index=True, use_container_width=True)
 
 # TAB 3: ROUND WINNERS
@@ -157,18 +158,23 @@ with tab_round:
             name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
             s_val = None
             
-            # --- DEFENSIVE MULTI-KEY SEARCH ---
-            # 1. Check if this is the ACTIVE round
-            if str(r.get('currentRound')) == str(target_num):
+            # EXTRACT CURRENT ROUND FROM OBJECT: {"$numberInt": "2"}
+            current_rd_obj = r.get('currentRound', {})
+            player_current_rd = int(current_rd_obj.get('$numberInt', 0)) if isinstance(current_rd_obj, dict) else 0
+            
+            # 1. If selected round is the player's active round
+            if player_current_rd == target_num:
                 s_val = r.get('currentRoundScore')
             
-            # 2. Check the rounds array (searching for roundNum OR roundId)
+            # 2. If it's a completed round, check the 'rounds' list
             if s_val is None:
                 for rd in r.get('rounds', []):
-                    # We check for roundNum=1 OR roundId=0 for Round 1
-                    if str(rd.get('roundNum')) == str(target_num) or str(rd.get('roundId')) == str(target_num - 1):
-                        # Try every possible score key used by this API
-                        s_val = rd.get('scoreToPar', rd.get('score_to_par', rd.get('today')))
+                    # roundId is also an object: {"$numberInt": "1"}
+                    rd_id_obj = rd.get('roundId', {})
+                    this_rd_id = int(rd_id_obj.get('$numberInt', 0)) if isinstance(rd_id_obj, dict) else 0
+                    
+                    if this_rd_id == target_num:
+                        s_val = rd.get('scoreToPar')
                         break
 
             if s_val is not None and str(s_val).lower() != 'none':
@@ -200,9 +206,6 @@ with tab_round:
             st.dataframe(df_burners.head(10), hide_index=True, use_container_width=True)
         else:
             st.warning(f"No score data found for {selected_round}.")
-            with st.expander("🛠️ Live Data Diagnostic (Click to see why keys aren't matching)"):
-                st.write("First Player Data keys:", list(live_rows[0].keys()))
-                st.write("First Player Full JSON:", live_rows[0])
 
 # TAB 4: FIELD INTELLIGENCE
 with tab_intel:
@@ -213,7 +216,7 @@ with tab_intel:
             pro_scores = []
             for r in live_rows:
                 name = f"{r.get('firstName')} {r.get('lastName')}".strip()
-                s = r.get('totalToPar') if r.get('totalToPar') is not None else r.get('total', 'E')
+                s = r.get('total', 'E')
                 pro_scores.append({"name": name, "score": parse_score_to_int(s), "is_elite": name in TOP_30})
             df_pro = pd.DataFrame(pro_scores).sort_values("score")
             wildcards = df_pro[df_pro['is_elite'] == False]
