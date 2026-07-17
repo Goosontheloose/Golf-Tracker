@@ -12,6 +12,7 @@ st.set_page_config(page_title="154th Open Championship Tracker", layout="wide")
 st.markdown("""
    <style>
    .main { background-color: #0B1221; color: #F1E9DB; }
+   [data-testid="stHeader"] { background: rgba(0,0,0,0); }
    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
    .stTabs [data-baseweb="tab"] {
        background-color: #1E293B;
@@ -19,6 +20,7 @@ st.markdown("""
        padding: 10px 20px;
        color: #D4AF37;
        font-weight: bold;
+       border-radius: 4px 4px 0 0;
    }
    .stTabs [aria-selected="true"] { background-color: #D4AF37 !important; color: #0B1221 !important; }
    </style>
@@ -58,7 +60,7 @@ def get_sheet():
 API_KEY = st.secrets["api_key"]
 YEAR, TOURN_ID = "2026", "100"
 
-# --- 5. DATA FETCHING ---
+# --- 5. DATA HELPERS ---
 @st.cache_data(ttl=600)
 def get_live_scores():
     try:
@@ -76,6 +78,10 @@ def parse_score_to_int(s):
     try: return int(str(s).replace('+', ''))
     except: return 0
 
+def format_score_val(val):
+    if val == 0: return "E"
+    return f"+{val}" if val > 0 else str(val)
+
 def get_round_averages(live_rows):
     avgs = {1: 0, 2: 0, 3: 0, 4: 0}
     for r_num in range(1, 5):
@@ -92,7 +98,7 @@ def get_round_averages(live_rows):
             avgs[r_num] = round(sum(scores) / len(scores))
     return avgs
 
-# --- 6. APP TABS ---
+# --- 6. MAIN APP ---
 st.title("🏆 154th Open Championship Tracker")
 
 tab_lead, tab_field, tab_round, tab_intel, tab_data = st.tabs([
@@ -114,105 +120,146 @@ with tab_lead:
         if raw_entries:
             final_data = []
             for entry in raw_entries:
-                p1, p2, p3 = str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))
+                p_names = [str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))]
                 user_name = str(entry.get("User", "Unknown"))
-                if not p1: continue
+                if not p_names[0]: continue
 
                 s_ints, s_disp = [], []
-                for p_name in [p1, p2, p3]:
+                for p_name in p_names:
                     p_api = next((r for r in live_rows if f"{r.get('firstName')} {r.get('lastName')}".lower() == p_name.lower()), None)
                     
                     if p_api:
                         pos = str(p_api.get('position', ''))
+                        actual_score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in p_api.get('rounds', []))
                         
-                        # CALC ACTUAL SCORE FROM COMPLETED ROUNDS
-                        actual_score = 0
-                        completed_rounds = []
-                        for rd in p_api.get('rounds', []):
-                            rd_score = parse_score_to_int(rd.get('scoreToPar'))
-                            actual_score += rd_score
-                            rd_id = rd.get('roundId', {})
-                            rd_val = int(rd_id.get('$numberInt', 0)) if isinstance(rd_id, dict) else int(rd_id)
-                            completed_rounds.append(rd_val)
-
-                        # MISSED CUT LOGIC
                         if pos in ["CUT", "WD", "DQ", ""]:
-                            penalty = 0
-                            # Add average for every round they didn't finish
-                            for r_idx in range(1, 5):
-                                if r_idx not in completed_rounds:
-                                    penalty += round_avgs.get(r_idx, 0)
+                            completed_rounds = []
+                            for rd in p_api.get('rounds', []):
+                                r_id = rd.get('roundId', {})
+                                completed_rounds.append(int(r_id.get('$numberInt', 0)) if isinstance(r_id, dict) else int(r_id))
                             
+                            penalty = sum(round_avgs[r] for r in range(1, 5) if r not in completed_rounds)
                             num = actual_score + penalty
                             status = " (MC)"
                         else:
-                            # Still playing: Use total from API (or our calculation)
-                            num = parse_score_to_int(p_api.get('total', actual_score))
-                            status = ""
+                            num, status = actual_score, ""
                     else:
                         num, status = 0, " (?)"
 
                     s_ints.append(num)
-                    fmt = "E" if num == 0 else (f"+{num}" if num > 0 else num)
-                    s_disp.append(f"{p_name} ({fmt}){status}")
+                    s_disp.append(f"{p_name} ({format_score_val(num)}){status}")
 
                 final_data.append({"User": user_name, "P1": s_disp[0], "P2": s_disp[1], "P3": s_disp[2], "TotalInt": sum(s_ints)})
 
             df_s = pd.DataFrame(final_data).sort_values("TotalInt")
             df_s.insert(0, 'Rank', range(1, 1 + len(df_s)))
-            df_s['Total'] = df_s['TotalInt'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
+            df_s['Total'] = df_s['TotalInt'].apply(format_score_val)
             st.dataframe(df_s[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], hide_index=True, use_container_width=True)
-            st.caption(f"Current penalties being applied for MC: R3: {round_avgs[3]}, R4: {round_avgs[4]}")
+            st.caption(f"MC Penalties: R3: {format_score_val(round_avgs[3])}, R4: {format_score_val(round_avgs[4])}")
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Standings Error: {e}")
 
-# TAB 2: MASTER BOARD (Keep Original)
+# TAB 2: OFFICIAL MASTER BOARD
 with tab_field:
     st.header("Official 154th Open Leaderboard")
     if live_rows:
-        st.subheader("🥇 Championship Leaders")
-        pro_list = []
+        master_display_list = []
         for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
-            pro_list.append({"name": name, "score": parse_score_to_int(r.get('total')), "thru": r.get('thru'), "pos": r.get('position')})
-        top_5 = sorted(pro_list, key=lambda x: x['score'])[:5]
+            actual_total = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in r.get('rounds', []))
+            pos = str(r.get('position', ''))
+            master_display_list.append({
+                "Pos": pos if pos else "CUT",
+                "Golfer": name,
+                "Thru": r.get('thru'),
+                "Score": format_score_val(actual_total),
+                "SortVal": actual_total
+            })
+
+        st.subheader("🥇 Championship Leaders")
+        top_5 = sorted(master_display_list, key=lambda x: x['SortVal'])[:5]
         cols = st.columns(5)
         for i, p in enumerate(top_5):
-            score_fmt = "E" if p['score'] == 0 else (f"+{p['score']}" if p['score'] > 0 else p['score'])
-            cols[i].metric(label=f"{p['pos']} | Thru: {p['thru']}", value=p['name'], delta=f"Score: {score_fmt}", delta_color="inverse")
-        st.divider()
-        master_df = pd.DataFrame([{"Pos": r.get('position'), "Golfer": f"{r.get('firstName')} {r.get('lastName')}", "Thru": r.get('thru'), "Score": r.get('total', 'E')} for r in live_rows])
-        st.dataframe(master_df, hide_index=True, use_container_width=True)
+            cols[i].metric(label=f"{p['Pos']} | Thru: {p['Thru']}", value=p['Golfer'], delta=f"Score: {p['Score']}", delta_color="inverse")
 
-# TAB 3: ROUND WINNERS (Keep Original)
+        st.divider()
+        df_master = pd.DataFrame(master_display_list)[["Pos", "Golfer", "Thru", "Score"]]
+        st.dataframe(df_master, hide_index=True, use_container_width=True)
+
+# TAB 3: ROUND WINNERS
 with tab_round:
     st.header("Daily Performance Analysis")
     selected_round = st.radio("Select Round", ["Round 1", "Round 2", "Round 3", "Round 4"], horizontal=True)
     target_num = int(selected_round[-1])
+
     if live_rows:
         pro_round_scores = []
         for r in live_rows:
             name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
-            s_val = None
             for rd in r.get('rounds', []):
                 rd_id_obj = rd.get('roundId', {})
                 this_rd_id = int(rd_id_obj.get('$numberInt', 0)) if isinstance(rd_id_obj, dict) else int(rd_id_obj)
                 if this_rd_id == target_num:
-                    s_val = rd.get('scoreToPar')
+                    pro_round_scores.append({"name": name, "score": parse_score_to_int(rd.get('scoreToPar'))})
                     break
-            if s_val is not None:
-                pro_round_scores.append({"name": name, "score": parse_score_to_int(s_val)})
+
         if pro_round_scores:
+            st.subheader(f"🏆 Top Professionals: {selected_round}")
             top_3_rd = sorted(pro_round_scores, key=lambda x: x['score'])[:3]
             cols = st.columns(3)
             for i, p in enumerate(top_3_rd):
-                score_fmt = "E" if p['score'] == 0 else (f"+{p['score']}" if p['score'] > 0 else p['score'])
-                cols[i].metric(label=f"Rank {i+1}", value=p['name'], delta=f"Rd Score: {score_fmt}", delta_color="inverse")
+                cols[i].metric(label=f"Rank {i+1}", value=p['name'], delta=f"Rd Score: {format_score_val(p['score'])}", delta_color="inverse")
+            
+            st.divider()
+            st.subheader(f"🔥 Daily Burners: {selected_round} Standings")
+            rd_lookup = {p['name'].lower(): p['score'] for p in pro_round_scores}
+            raw_entries = get_sheet().get_all_records()
+            team_perf = []
+            for entry in raw_entries:
+                user = str(entry.get("User", "Unknown"))
+                p_names = [str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))]
+                if not p_names[0]: continue
+                
+                rd_total, p_details = 0, []
+                for p_n in p_names:
+                    p_s = rd_lookup.get(p_n.lower(), round_avgs.get(target_num, 0))
+                    rd_total += p_s
+                    p_details.append(f"{p_n} ({format_score_val(p_s)})")
 
-# TAB 4 & 5: (Keep Original)
+                team_perf.append({"User": user, "P1": p_details[0], "P2": p_details[1], "P3": p_details[2], "Rd Total": rd_total})
+
+            df_burners = pd.DataFrame(team_perf).sort_values("Rd Total")
+            df_burners.insert(0, 'Rank', range(1, 1 + len(df_burners)))
+            df_burners['Rd Total'] = df_burners['Rd Total'].apply(format_score_val)
+            st.dataframe(df_burners, hide_index=True, use_container_width=True)
+
+# TAB 4: FIELD INTELLIGENCE
 with tab_intel:
     st.header("Trends & Analysis")
+    try:
+        raw_entries = get_sheet().get_all_records()
+        if raw_entries:
+            all_picks, duos = [], []
+            for row in raw_entries:
+                picks = [str(row.get("P1", "")), str(row.get("P2", "")), str(row.get("P3", ""))]
+                if picks[0]:
+                    all_picks.extend(picks)
+                    duos.extend(list(combinations(sorted(picks), 2)))
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader("Most Selected Players")
+                st.dataframe(pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections']), hide_index=True)
+            with c2:
+                st.subheader("Most Popular Pairs")
+                st.dataframe(pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)]), hide_index=True)
+    except: pass
+
+# TAB 5: REGISTRY DATA
 with tab_data:
     st.header("Search Registry")
-    df_raw = pd.DataFrame(get_sheet().get_all_records())
-    st.dataframe(df_raw, hide_index=True, use_container_width=True)
+    try:
+        df_reg = pd.DataFrame(get_sheet().get_all_records())
+        df_reg.insert(0, '#', range(1, 1 + len(df_reg)))
+        st.dataframe(df_reg, hide_index=True, use_container_width=True)
+    except: st.info("Registry empty.")
