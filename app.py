@@ -113,14 +113,20 @@ with tab_lead:
                     fmt = "E" if num == 0 else (f"+{num}" if num > 0 else num)
                     s_disp.append(f"{p_name} ({fmt})")
 
-                final_data.append({"User": user_name, "P1": s_disp[0], "P2": s_disp[1](https://slashgolf.dev/docs.html "inline-citation"), "P3": s_disp[2](https://slashgolf.dev/quickstart.html "inline-citation"), "TotalInt": sum(s_ints)})
+                final_data.append({
+                    "User": user_name, 
+                    "P1": s_disp[0], 
+                    "P2": s_disp[1], 
+                    "P3": s_disp[2], 
+                    "TotalInt": sum(s_ints)
+                })
             
             df_s = pd.DataFrame(final_data).sort_values("TotalInt")
             df_s.insert(0, 'Rank', range(1, 1 + len(df_s)))
             df_s['Total'] = df_s['TotalInt'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
             st.dataframe(df_s[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], hide_index=True, use_container_width=True)
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error calculation: {e}")
 
 # TAB 2: OFFICIAL MASTER BOARD
 with tab_field:
@@ -150,14 +156,13 @@ with tab_round:
     live_rows = get_live_scores()
     selected_round = st.radio("Select Round", ["Round 1", "Round 2", "Round 3", "Round 4"], horizontal=True)
     
-    # API FIX: Round 1 is index 0
+    # API indexing: Round 1 is index 0
     rd_idx = int(selected_round[-1]) - 1 
     
     if live_rows:
         pro_round_scores = []
         for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
-            # Match 0-based roundId
             round_data = next((rd for rd in r.get('rounds', []) if rd.get('roundId') == rd_idx), None)
             if round_data:
                 s = round_data.get('scoreToPar')
@@ -171,7 +176,7 @@ with tab_round:
                 score_fmt = "E" if p['score'] == 0 else (f"+{p['score']}" if p['score'] > 0 else p['score'])
                 cols[i].metric(label=f"Rank {i+1}", value=p['name'], delta=f"Rd Score: {score_fmt}", delta_color="inverse")
         else:
-            st.info(f"Round data for {selected_round} is not yet available in the API.")
+            st.info(f"Round data for {selected_round} is not yet available.")
 
         st.divider()
         st.subheader(f"🔥 Daily Burners: Top Teams for {selected_round}")
@@ -183,7 +188,6 @@ with tab_round:
                 p1, p2, p3 = str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))
                 user = str(entry.get("User", "Unknown"))
                 if not p1: continue
-                # Players not in the list (missed cut/not started) default to 0 for that round
                 t_score = sum([rd_map.get(p_name.lower(), 0) for p_name in [p1, p2, p3]])
                 team_perf.append({"User": user, "Roster": f"{p1}, {p2}, {p3}", "Rd Score": t_score})
             
@@ -237,7 +241,7 @@ with tab_intel:
                 st.dataframe(pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections']), hide_index=True)
             with col_b:
                 st.subheader("Most Popular Pairs")
-                st.dataframe(pd.DataFrame([{"Pair": f"{d[0]} & {d[1](https://slashgolf.dev/docs.html "inline-citation")}", "Count": c} for d, c in Counter(duos).most_common(5)]), hide_index=True)
+                st.dataframe(pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)]), hide_index=True)
     except: pass
 
 # TAB 5: REGISTRY DATA
