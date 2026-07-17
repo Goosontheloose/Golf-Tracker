@@ -113,7 +113,7 @@ with tab_lead:
                     fmt = "E" if num == 0 else (f"+{num}" if num > 0 else num)
                     s_disp.append(f"{p_name} ({fmt})")
 
-                final_data.append({"User": user_name, "P1": s_disp[0], "P2": s_disp[1](https://slashgolf.dev/docs.html "inline-citation"), "P3": s_disp[2](https://slashgolf.dev/quickstart.html "inline-citation"), "TotalInt": sum(s_ints)})
+                final_data.append({"User": user_name, "P1": s_disp[0], "P2": s_disp[1], "P3": s_disp[2], "TotalInt": sum(s_ints)})
             
             df_s = pd.DataFrame(final_data).sort_values("TotalInt")
             df_s.insert(0, 'Rank', range(1, 1 + len(df_s)))
@@ -149,26 +149,21 @@ with tab_round:
     st.header("Daily Performance Analysis")
     live_rows = get_live_scores()
     selected_round = st.radio("Select Round", ["Round 1", "Round 2", "Round 3", "Round 4"], horizontal=True)
-    
-    target_num = int(selected_round[-1]) # e.g. 1
+    target_num = int(selected_round[-1])
     
     if live_rows:
         pro_round_scores = []
         for r in live_rows:
             name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
-            
             s_val = None
             
-            # LOGIC FIX: Check if we are looking at the round currently in progress
-            # The current round score is at the TOP LEVEL, not in the rounds list.
-            current_api_rd = r.get('currentRound') # 1, 2, 3, or 4
-            if str(current_api_rd) == str(target_num):
+            # Check if selected round is currently LIVE
+            if str(r.get('currentRound')) == str(target_num):
                 s_val = r.get('currentRoundScore')
             
-            # If it's a past round, it will be in the nested 'rounds' list
+            # Check historical rounds in the list
             if s_val is None:
                 for rd in r.get('rounds', []):
-                    # Round 1 has ID 0 or 1 depending on sync; we check both
                     if str(rd.get('roundId')) == str(target_num - 1) or str(rd.get('roundNum')) == str(target_num):
                         s_val = rd.get('scoreToPar')
                         break
@@ -201,7 +196,7 @@ with tab_round:
             df_burners['Rd Score'] = df_burners['Rd Score'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
             st.dataframe(df_burners.head(10), hide_index=True, use_container_width=True)
         else:
-            st.warning(f"No score data found for {selected_round}. Note: API updates Round scores as players finish holes.")
+            st.warning(f"No score data found for {selected_round}.")
 
 # TAB 4: FIELD INTELLIGENCE
 with tab_intel:
@@ -247,7 +242,7 @@ with tab_intel:
                 st.dataframe(pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Selections']), hide_index=True)
             with col_b:
                 st.subheader("Most Popular Pairs")
-                st.dataframe(pd.DataFrame([{"Pair": f"{d[0]} & {d[1](https://slashgolf.dev/docs.html "inline-citation")}", "Count": c} for d, c in Counter(duos).most_common(5)]), hide_index=True)
+                st.dataframe(pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)]), hide_index=True)
     except: pass
 
 # TAB 5: REGISTRY DATA
