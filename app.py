@@ -113,20 +113,14 @@ with tab_lead:
                     fmt = "E" if num == 0 else (f"+{num}" if num > 0 else num)
                     s_disp.append(f"{p_name} ({fmt})")
 
-                final_data.append({
-                    "User": user_name, 
-                    "P1": s_disp[0], 
-                    "P2": s_disp[1], 
-                    "P3": s_disp[2], 
-                    "TotalInt": sum(s_ints)
-                })
+                final_data.append({"User": user_name, "P1": s_disp[0], "P2": s_disp[1], "P3": s_disp[2], "TotalInt": sum(s_ints)})
             
             df_s = pd.DataFrame(final_data).sort_values("TotalInt")
             df_s.insert(0, 'Rank', range(1, 1 + len(df_s)))
             df_s['Total'] = df_s['TotalInt'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
             st.dataframe(df_s[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], hide_index=True, use_container_width=True)
     except Exception as e:
-        st.error(f"Error calculation: {e}")
+        st.error(f"Error calculating standings: {e}")
 
 # TAB 2: OFFICIAL MASTER BOARD
 with tab_field:
@@ -156,14 +150,18 @@ with tab_round:
     live_rows = get_live_scores()
     selected_round = st.radio("Select Round", ["Round 1", "Round 2", "Round 3", "Round 4"], horizontal=True)
     
-    # API indexing: Round 1 is index 0
-    rd_idx = int(selected_round[-1]) - 1 
+    # Target Round Number (1, 2, 3, or 4)
+    target_rd = int(selected_round[-1])
     
     if live_rows:
         pro_round_scores = []
         for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
-            round_data = next((rd for rd in r.get('rounds', []) if rd.get('roundId') == rd_idx), None)
+            # Try to find the round by checking both target_rd (1-based) and target_rd-1 (0-based)
+            # This makes the app self-heal regardless of the API version
+            round_list = r.get('rounds', [])
+            round_data = next((rd for rd in round_list if str(rd.get('roundId')) in [str(target_rd), str(target_rd-1)]), None)
+            
             if round_data:
                 s = round_data.get('scoreToPar')
                 pro_round_scores.append({"name": name, "score": parse_score_to_int(s)})
@@ -176,7 +174,7 @@ with tab_round:
                 score_fmt = "E" if p['score'] == 0 else (f"+{p['score']}" if p['score'] > 0 else p['score'])
                 cols[i].metric(label=f"Rank {i+1}", value=p['name'], delta=f"Rd Score: {score_fmt}", delta_color="inverse")
         else:
-            st.info(f"Round data for {selected_round} is not yet available.")
+            st.info(f"Round data for {selected_round} is not yet available. If the round has started, the API may still be syncing.")
 
         st.divider()
         st.subheader(f"🔥 Daily Burners: Top Teams for {selected_round}")
@@ -188,6 +186,7 @@ with tab_round:
                 p1, p2, p3 = str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))
                 user = str(entry.get("User", "Unknown"))
                 if not p1: continue
+                # Players not found in the round score list are treated as 0 (Even) for that round
                 t_score = sum([rd_map.get(p_name.lower(), 0) for p_name in [p1, p2, p3]])
                 team_perf.append({"User": user, "Roster": f"{p1}, {p2}, {p3}", "Rd Score": t_score})
             
