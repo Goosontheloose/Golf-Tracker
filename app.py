@@ -159,17 +159,21 @@ with tab_round:
             round_list = r.get('rounds', [])
             rd_data = None
             
-            # Deep Scan for matching round ID or Number
-            for rd in round_list:
-                rid = rd.get('roundId')
-                rnum = rd.get('roundNumber')
-                if str(rid) in [str(target_num), str(target_num-1)] or str(rnum) == str(target_num):
+            # THE FIX: Checked roundNum, roundId, and list index as fallbacks
+            for idx, rd in enumerate(round_list):
+                r_num_val = rd.get('roundNum')
+                r_id_val = rd.get('roundId')
+                
+                if str(r_num_val) == str(target_num) or \
+                   str(r_id_val) == str(target_num - 1) or \
+                   (not r_num_val and not r_id_val and idx == (target_num - 1)):
                     rd_data = rd
                     break
             
             if rd_data:
-                s = rd_data.get('scoreToPar') if rd_data.get('scoreToPar') is not None else rd_data.get('score')
-                pro_round_scores.append({"name": name, "score": parse_score_to_int(s)})
+                s = rd_data.get('scoreToPar')
+                if s is not None:
+                    pro_round_scores.append({"name": name, "score": parse_score_to_int(s)})
         
         st.subheader(f"🏆 Top 3 Professionals: {selected_round}")
         if pro_round_scores:
@@ -179,7 +183,7 @@ with tab_round:
                 score_fmt = "E" if p['score'] == 0 else (f"+{p['score']}" if p['score'] > 0 else p['score'])
                 cols[i].metric(label=f"Rank {i+1}", value=p['name'], delta=f"Rd Score: {score_fmt}", delta_color="inverse")
         else:
-            st.warning(f"No round data found for {selected_round}.")
+            st.warning(f"No round data found for {selected_round}. Note: Round data only populates once players begin their round.")
 
         st.divider()
         st.subheader(f"🔥 Daily Burners: Top Teams for {selected_round}")
@@ -188,7 +192,7 @@ with tab_round:
             rd_map = {p['name'].lower(): p['score'] for p in pro_round_scores}
             team_perf = []
             for entry in raw_entries:
-                p1, p2, p3 = str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))
+                p1, p2, p3 = str(entry.get("P1", "")).strip(), str(entry.get("P2", "")).strip(), str(entry.get("P3", "")).strip()
                 user = str(entry.get("User", "Unknown"))
                 if not p1: continue
                 
