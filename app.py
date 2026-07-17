@@ -71,7 +71,7 @@ def get_live_scores():
         return []
 
 def parse_score_to_int(s):
-    if s is None or s in ['E', 'Even', '-', '']: return 0
+    if s is None or s in ['E', 'Even', '-', '', 'null']: return 0
     try: return int(str(s).replace('+', ''))
     except: return 0
 
@@ -149,31 +149,32 @@ with tab_round:
     st.header("Daily Performance Analysis")
     live_rows = get_live_scores()
     selected_round = st.radio("Select Round", ["Round 1", "Round 2", "Round 3", "Round 4"], horizontal=True)
-    
     target_num = int(selected_round[-1])
     
     if live_rows:
         pro_round_scores = []
         for r in live_rows:
             name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
-            round_list = r.get('rounds', [])
-            rd_data = None
             
-            # THE FIX: Checked roundNum, roundId, and list index as fallbacks
-            for idx, rd in enumerate(round_list):
-                r_num_val = rd.get('roundNum')
-                r_id_val = rd.get('roundId')
-                
-                if str(r_num_val) == str(target_num) or \
-                   str(r_id_val) == str(target_num - 1) or \
-                   (not r_num_val and not r_id_val and idx == (target_num - 1)):
-                    rd_data = rd
-                    break
+            # --- BRUTE FORCE SEARCH FOR ROUND SCORE ---
+            s_val = None
             
-            if rd_data:
-                s = rd_data.get('scoreToPar')
-                if s is not None:
-                    pro_round_scores.append({"name": name, "score": parse_score_to_int(s)})
+            # Method 1: Check r1, r2, r3, r4 keys (Top Level)
+            s_val = r.get(f'r{target_num}')
+            
+            # Method 2: Check nested list
+            if s_val is None:
+                for rd in r.get('rounds', []):
+                    if str(rd.get('roundNum')) == str(target_num) or str(rd.get('roundId')) == str(target_num-1):
+                        s_val = rd.get('scoreToPar', rd.get('score'))
+                        break
+            
+            # Method 3: Check roundNumber objects
+            if s_val is None:
+                s_val = r.get(f'round{target_num}')
+
+            if s_val is not None and str(s_val).lower() != 'none':
+                pro_round_scores.append({"name": name, "score": parse_score_to_int(s_val)})
         
         st.subheader(f"🏆 Top 3 Professionals: {selected_round}")
         if pro_round_scores:
@@ -182,20 +183,16 @@ with tab_round:
             for i, p in enumerate(top_3_rd):
                 score_fmt = "E" if p['score'] == 0 else (f"+{p['score']}" if p['score'] > 0 else p['score'])
                 cols[i].metric(label=f"Rank {i+1}", value=p['name'], delta=f"Rd Score: {score_fmt}", delta_color="inverse")
-        else:
-            st.warning(f"No round data found for {selected_round}. Note: Round data only populates once players begin their round.")
-
-        st.divider()
-        st.subheader(f"🔥 Daily Burners: Top Teams for {selected_round}")
-        raw_entries = get_sheet().get_all_records()
-        if raw_entries and pro_round_scores:
+            
+            st.divider()
+            st.subheader(f"🔥 Daily Burners: Top Teams for {selected_round}")
+            raw_entries = get_sheet().get_all_records()
             rd_map = {p['name'].lower(): p['score'] for p in pro_round_scores}
             team_perf = []
             for entry in raw_entries:
                 p1, p2, p3 = str(entry.get("P1", "")).strip(), str(entry.get("P2", "")).strip(), str(entry.get("P3", "")).strip()
                 user = str(entry.get("User", "Unknown"))
                 if not p1: continue
-                
                 t_score = sum([rd_map.get(p_name.lower(), 0) for p_name in [p1, p2, p3]])
                 team_perf.append({"User": user, "Roster": f"{p1}, {p2}, {p3}", "Rd Score": t_score})
             
@@ -203,6 +200,13 @@ with tab_round:
             df_burners.insert(0, '#', range(1, 1 + len(df_burners)))
             df_burners['Rd Score'] = df_burners['Rd Score'].apply(lambda x: "E" if x == 0 else (f"+{x}" if x > 0 else x))
             st.dataframe(df_burners.head(10), hide_index=True, use_container_width=True)
+        else:
+            st.warning(f"No score data found for {selected_round}.")
+            with st.expander("🛠️ API Debug Panel (Click to see why data is missing)"):
+                st.write("Keys found in player data:")
+                st.write(list(live_rows[0].keys()))
+                st.write("Sample Player Data:")
+                st.write(live_rows[0])
 
 # TAB 4: FIELD INTELLIGENCE
 with tab_intel:
