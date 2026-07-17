@@ -26,17 +26,7 @@ st.markdown("""
    </style>
 """, unsafe_allow_html=True)
 
-# --- 2. TOP 30 REFERENCE ---
-TOP_30 = [
-"Scottie Scheffler", "Rory McIlroy", "Xander Schauffele", "Ludvig Aberg", "Wyndham Clark",
-"Viktor Hovland", "Collin Morikawa", "Patrick Cantlay", "Bryson DeChambeau", "Jon Rahm",
-"Tommy Fleetwood", "Brooks Koepka", "Matt Fitzpatrick", "Jordan Spieth", "Max Homa",
-"Hideki Matsuyama", "Sahith Theegala", "Tyrrell Hatton", "Cameron Smith", "Keegan Bradley",
-"Jason Day", "Tom Kim", "Tony Finau", "Brian Harman", "Sungjae Im", 
-"Russell Henley", "Justin Thomas", "Shane Lowry", "Min Woo Lee", "Corey Conners"
-]
-
-# --- 3. AUTHENTICATION ---
+# --- 2. AUTHENTICATION ---
 @st.cache_resource
 def get_sheet():
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -56,11 +46,11 @@ def get_sheet():
     client = gspread.authorize(creds)
     return client.open("British Open Sheet").sheet1 
 
-# --- 4. CONFIG ---
+# --- 3. CONFIG ---
 API_KEY = st.secrets["api_key"]
 YEAR, TOURN_ID = "2026", "100"
 
-# --- 5. DATA HELPERS ---
+# --- 4. DATA HELPERS ---
 @st.cache_data(ttl=600)
 def get_live_scores():
     try:
@@ -87,18 +77,19 @@ def get_round_averages(live_rows):
     for r_num in range(1, 5):
         scores = []
         for r in live_rows:
-            pos = str(r.get('position', ''))
-            if any(char.isdigit() for char in pos) or pos.startswith('T'):
-                for rd_data in r.get('rounds', []):
-                    rd_id = rd_data.get('roundId', {})
-                    rd_val = int(rd_id.get('$numberInt', 0)) if isinstance(rd_id, dict) else int(rd_id)
-                    if rd_val == r_num:
-                        scores.append(parse_score_to_int(rd_data.get('scoreToPar')))
+            # Only count players who actually have a score for this round in the average
+            for rd_data in r.get('rounds', []):
+                rd_id = rd_data.get('roundId', {})
+                rd_val = int(rd_id.get('$numberInt', 0)) if isinstance(rd_id, dict) else int(rd_id)
+                if rd_val == r_num:
+                    s_raw = rd_data.get('scoreToPar')
+                    if s_raw is not None and s_raw != "":
+                        scores.append(parse_score_to_int(s_raw))
         if scores:
             avgs[r_num] = round(sum(scores) / len(scores))
     return avgs
 
-# --- 6. MAIN APP ---
+# --- 5. MAIN APP ---
 st.title("🏆 154th Open Championship Tracker")
 
 tab_lead, tab_field, tab_round, tab_intel, tab_data = st.tabs([
@@ -130,19 +121,24 @@ with tab_lead:
                     
                     if p_api:
                         pos = str(p_api.get('position', ''))
+                        # Sum up all available round scores
                         actual_score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in p_api.get('rounds', []))
                         
-                        if pos in ["CUT", "WD", "DQ", ""]:
+                        # SAFETY CHECK: Only apply penalty if status is CUT/WD/DQ
+                        if pos in ["CUT", "WD", "DQ"]:
                             completed_rounds = []
                             for rd in p_api.get('rounds', []):
                                 r_id = rd.get('roundId', {})
                                 completed_rounds.append(int(r_id.get('$numberInt', 0)) if isinstance(r_id, dict) else int(r_id))
                             
+                            # Penalty only for rounds the player missed because they were cut
                             penalty = sum(round_avgs[r] for r in range(1, 5) if r not in completed_rounds)
                             num = actual_score + penalty
                             status = " (MC)"
                         else:
-                            num, status = actual_score, ""
+                            # Player is still active (even if they haven't teed off yet for the current round)
+                            num = actual_score
+                            status = ""
                     else:
                         num, status = 0, " (?)"
 
@@ -155,7 +151,7 @@ with tab_lead:
             df_s.insert(0, 'Rank', range(1, 1 + len(df_s)))
             df_s['Total'] = df_s['TotalInt'].apply(format_score_val)
             st.dataframe(df_s[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], hide_index=True, use_container_width=True)
-            st.caption(f"MC Penalties: R3: {format_score_val(round_avgs[3])}, R4: {format_score_val(round_avgs[4])}")
+            st.caption(f"Current penalties (Applied only to MC): R3: {format_score_val(round_avgs[3])}, R4: {format_score_val(round_avgs[4])}")
     except Exception as e:
         st.error(f"Standings Error: {e}")
 
@@ -166,6 +162,7 @@ with tab_field:
         master_display_list = []
         for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
+            # Always show their actual current total relative to par
             actual_total = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in r.get('rounds', []))
             pos = str(r.get('position', ''))
             master_display_list.append({
@@ -222,7 +219,15 @@ with tab_round:
                 
                 rd_total, p_details = 0, []
                 for p_n in p_names:
-                    p_s = rd_lookup.get(p_n.lower(), round_avgs.get(target_num, 0))
+                    # Logic: Get player round score. 
+                    # If they have no score and are CUT, use average. 
+                    # If they have no score and are ACTIVE (not teed off), use 0.
+                    p_s = rd_lookup.get(p_n.lower())
+                    if p_s is None:
+                        # Find player status
+                        p_status = next((str(r.get('position', '')) for r in live_rows if f"{r.get('firstName')} {r.get('lastName')}".lower() == p_n.lower()), "")
+                        p_s = round_avgs.get(target_num, 0) if p_status in ["CUT", "WD", "DQ"] else 0
+                    
                     rd_total += p_s
                     p_details.append(f"{p_n} ({format_score_val(p_s)})")
 
