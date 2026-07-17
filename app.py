@@ -149,29 +149,26 @@ with tab_round:
     st.header("Daily Performance Analysis")
     live_rows = get_live_scores()
     selected_round = st.radio("Select Round", ["Round 1", "Round 2", "Round 3", "Round 4"], horizontal=True)
-    target_num = int(selected_round[-1])
+    
+    target_display_num = int(selected_round[-1])
+    target_api_id = target_display_num - 1 # 0-based for API
     
     if live_rows:
         pro_round_scores = []
         for r in live_rows:
             name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
+            round_list = r.get('rounds', [])
+            current_rd_num = r.get('currentRound') 
             
-            # --- BRUTE FORCE SEARCH FOR ROUND SCORE ---
             s_val = None
+            for rd in round_list:
+                if rd.get('roundId') == target_api_id:
+                    s_val = rd.get('scoreToPar')
+                    break
             
-            # Method 1: Check r1, r2, r3, r4 keys (Top Level)
-            s_val = r.get(f'r{target_num}')
-            
-            # Method 2: Check nested list
-            if s_val is None:
-                for rd in r.get('rounds', []):
-                    if str(rd.get('roundNum')) == str(target_num) or str(rd.get('roundId')) == str(target_num-1):
-                        s_val = rd.get('scoreToPar', rd.get('score'))
-                        break
-            
-            # Method 3: Check roundNumber objects
-            if s_val is None:
-                s_val = r.get(f'round{target_num}')
+            # Fallback to currentRoundScore if nested round list hasn't synced
+            if s_val is None and str(current_rd_num) == str(target_display_num):
+                s_val = r.get('currentRoundScore')
 
             if s_val is not None and str(s_val).lower() != 'none':
                 pro_round_scores.append({"name": name, "score": parse_score_to_int(s_val)})
@@ -202,11 +199,6 @@ with tab_round:
             st.dataframe(df_burners.head(10), hide_index=True, use_container_width=True)
         else:
             st.warning(f"No score data found for {selected_round}.")
-            with st.expander("🛠️ API Debug Panel (Click to see why data is missing)"):
-                st.write("Keys found in player data:")
-                st.write(list(live_rows[0].keys()))
-                st.write("Sample Player Data:")
-                st.write(live_rows[0])
 
 # TAB 4: FIELD INTELLIGENCE
 with tab_intel:
