@@ -150,20 +150,25 @@ with tab_round:
     live_rows = get_live_scores()
     selected_round = st.radio("Select Round", ["Round 1", "Round 2", "Round 3", "Round 4"], horizontal=True)
     
-    # Target Round Number (1, 2, 3, or 4)
-    target_rd = int(selected_round[-1])
+    target_num = int(selected_round[-1])
     
     if live_rows:
         pro_round_scores = []
         for r in live_rows:
-            name = f"{r.get('firstName')} {r.get('lastName')}".strip()
-            # Try to find the round by checking both target_rd (1-based) and target_rd-1 (0-based)
-            # This makes the app self-heal regardless of the API version
+            name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
             round_list = r.get('rounds', [])
-            round_data = next((rd for rd in round_list if str(rd.get('roundId')) in [str(target_rd), str(target_rd-1)]), None)
+            rd_data = None
             
-            if round_data:
-                s = round_data.get('scoreToPar')
+            # Deep Scan for matching round ID or Number
+            for rd in round_list:
+                rid = rd.get('roundId')
+                rnum = rd.get('roundNumber')
+                if str(rid) in [str(target_num), str(target_num-1)] or str(rnum) == str(target_num):
+                    rd_data = rd
+                    break
+            
+            if rd_data:
+                s = rd_data.get('scoreToPar') if rd_data.get('scoreToPar') is not None else rd_data.get('score')
                 pro_round_scores.append({"name": name, "score": parse_score_to_int(s)})
         
         st.subheader(f"🏆 Top 3 Professionals: {selected_round}")
@@ -174,7 +179,7 @@ with tab_round:
                 score_fmt = "E" if p['score'] == 0 else (f"+{p['score']}" if p['score'] > 0 else p['score'])
                 cols[i].metric(label=f"Rank {i+1}", value=p['name'], delta=f"Rd Score: {score_fmt}", delta_color="inverse")
         else:
-            st.info(f"Round data for {selected_round} is not yet available. If the round has started, the API may still be syncing.")
+            st.warning(f"No round data found for {selected_round}.")
 
         st.divider()
         st.subheader(f"🔥 Daily Burners: Top Teams for {selected_round}")
@@ -186,7 +191,7 @@ with tab_round:
                 p1, p2, p3 = str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))
                 user = str(entry.get("User", "Unknown"))
                 if not p1: continue
-                # Players not found in the round score list are treated as 0 (Even) for that round
+                
                 t_score = sum([rd_map.get(p_name.lower(), 0) for p_name in [p1, p2, p3]])
                 team_perf.append({"User": user, "Roster": f"{p1}, {p2}, {p3}", "Rd Score": t_score})
             
@@ -225,13 +230,12 @@ with tab_intel:
     try:
         raw_entries = get_sheet().get_all_records()
         if raw_entries:
-            all_picks, triplets, duos = [], [], []
+            all_picks, duos = [], []
             for row in raw_entries:
                 p1, p2, p3 = row.get("P1", ""), row.get("P2", ""), row.get("P3", "")
                 if not p1: continue
                 team = sorted([str(p1), str(p2), str(p3)])
                 all_picks.extend(team)
-                triplets.append(tuple(team))
                 duos.extend(list(combinations(team, 2)))
             st.divider()
             col_a, col_b = st.columns(2)
