@@ -59,7 +59,7 @@ API_KEY = st.secrets["api_key"]
 YEAR, TOURN_ID = "2026", "100"
 
 # --- 5. DATA FETCHING ---
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def get_live_scores():
     try:
         url = "https://live-golf-data.p.rapidapi.com/leaderboard"
