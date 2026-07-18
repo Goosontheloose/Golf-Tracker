@@ -137,9 +137,9 @@ with tab_lead:
                         
                         if p_api:
                             pos = str(p_api.get('position', ''))
-                            # LOGIC: Get cumulative score from the most recent round instead of summing
                             player_rounds = p_api.get('rounds', [])
-                            score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in player_rounds)
+                            # FIX: Changed 'score' to 'actual_score' to fix the NameError
+                            actual_score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in player_rounds)
                             
                             if pos in ["CUT", "WD", "DQ"]:
                                 completed_rounds = []
@@ -176,9 +176,9 @@ with tab_field:
         master_list = []
         for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
-            # LOGIC: Get cumulative score from the most recent round instead of summing
             player_rounds = r.get('rounds', [])
-            score = parse_score_to_int(player_rounds[-1].get('scoreToPar')) if player_rounds else 0
+            # FIX: Summing all rounds to get the correct tournament total (e.g. -8 for Jackson)
+            score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in player_rounds)
             
             pos = str(r.get('position', ''))
             master_list.append({"Pos": pos if pos else "CUT", "Golfer": name, "Thru": r.get('thru'), "Score": format_score_val(score), "Sort": score})
