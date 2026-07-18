@@ -139,7 +139,7 @@ with tab_lead:
                             pos = str(p_api.get('position', ''))
                             # LOGIC: Get cumulative score from the most recent round instead of summing
                             player_rounds = p_api.get('rounds', [])
-                            actual_score = parse_score_to_int(player_rounds[-1].get('scoreToPar')) if player_rounds else 0
+                            score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in player_rounds)
                             
                             if pos in ["CUT", "WD", "DQ"]:
                                 completed_rounds = []
