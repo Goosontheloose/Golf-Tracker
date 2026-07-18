@@ -137,11 +137,11 @@ with tab_lead:
                         
                         if p_api:
                             pos = str(p_api.get('position', ''))
-                            player_rounds = p_api.get('rounds', [])
-                            # FIX: Changed 'score' to 'actual_score' to fix the NameError
-                            actual_score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in player_rounds)
+                            # FIX: Use the official totalScoreToPar field instead of summing rounds
+                            actual_score = parse_score_to_int(p_api.get('totalScoreToPar', 0))
                             
                             if pos in ["CUT", "WD", "DQ"]:
+                                player_rounds = p_api.get('rounds', [])
                                 completed_rounds = []
                                 for rd in player_rounds:
                                     r_id = rd.get('roundId', {})
@@ -158,14 +158,14 @@ with tab_lead:
                         s_ints.append(num)
                         s_disp.append(f"{p_name} ({format_score_val(num)}){status}")
 
-                    final_data.append({"User": user_name, "P1": s_disp[0], "P2": s_disp[1], "P3": s_disp[2], "TotalInt": sum(s_ints)})
+                    final_data.append({"User": user_name, "P1": s_disp[0], "P2": s_disp[1](https://rapidapi.com/sportcontentapi/api/golf-leaderboard-data "inline-citation"), "P3": s_disp[2](https://rapidapi.com/belchiorarkad-FqvHs2EDOtP/api/live-golf-data1/playground/apiendpoint_8c9702cc-bcc2-4524-bbe8-b68ab1bb4f89 "inline-citation"), "TotalInt": sum(s_ints)})
 
                 if final_data:
                     df_s = pd.DataFrame(final_data).sort_values("TotalInt")
                     df_s.insert(0, 'Rank', range(1, 1 + len(df_s)))
                     df_s['Total'] = df_s['TotalInt'].apply(format_score_val)
                     st.dataframe(df_s[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], hide_index=True, use_container_width=True)
-                    st.caption(f"Penalties for MC (Current Avg): R3: {format_score_val(round_avgs[3])}, R4: {format_score_val(round_avgs[4])}")
+                    st.caption(f"Penalties for MC (Current Avg): R3: {format_score_val(round_avgs[3](https://rapidapi.com/slashgolf/api/live-golf-data "inline-citation"))}, R4: {format_score_val(round_avgs[4](https://rapidapi.com/sportcontentapi/api/golf-leaderboard-data "inline-citation"))}")
         except Exception as e:
             st.error(f"Error in Tab 1: {e}")
 
@@ -176,9 +176,8 @@ with tab_field:
         master_list = []
         for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
-            player_rounds = r.get('rounds', [])
-            # FIX: Summing all rounds to get the correct tournament total (e.g. -8 for Jackson)
-            score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in player_rounds)
+            # FIX: Use the official totalScoreToPar field to ensure scores match positions (T1, T4 etc.)
+            score = parse_score_to_int(r.get('totalScoreToPar', 0))
             
             pos = str(r.get('position', ''))
             master_list.append({"Pos": pos if pos else "CUT", "Golfer": name, "Thru": r.get('thru'), "Score": format_score_val(score), "Sort": score})
@@ -192,7 +191,7 @@ with tab_field:
         st.divider()
         st.dataframe(pd.DataFrame(master_list)[["Pos", "Golfer", "Thru", "Score"]], hide_index=True, use_container_width=True)
 
-# TAB 3: ROUND WINNERS
+# TAB 3: ROUND WINNERS (Kept as is for daily performance)
 with tab_round:
     st.header("Daily Performance Analysis")
     sel_rd = st.radio("Select Round", ["Round 1", "Round 2", "Round 3", "Round 4"], horizontal=True)
@@ -232,7 +231,7 @@ with tab_round:
                         s = round_avgs.get(target, 0) if p_stat in ["CUT", "WD", "DQ"] else 0
                     t_score += s
                     details.append(f"{p} ({format_score_val(s)})")
-                burners.append({"User": user, "P1": details[0], "P2": details[1], "P3": details[2], "Rd Total": t_score})
+                burners.append({"User": user, "P1": details[0], "P2": details[1](https://rapidapi.com/sportcontentapi/api/golf-leaderboard-data "inline-citation"), "P3": details[2](https://rapidapi.com/belchiorarkad-FqvHs2EDOtP/api/live-golf-data1/playground/apiendpoint_8c9702cc-bcc2-4524-bbe8-b68ab1bb4f89 "inline-citation"), "Rd Total": t_score})
 
             if burners:
                 df_b = pd.DataFrame(burners).sort_values("Rd Total")
@@ -259,7 +258,7 @@ with tab_intel:
                 st.dataframe(pd.DataFrame(Counter(all_p).most_common(10), columns=['Golfer', 'Selections']), hide_index=True)
             with c2:
                 st.subheader("Most Popular Pairs")
-                st.dataframe(pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(pairs).most_common(5)]), hide_index=True)
+                st.dataframe(pd.DataFrame([{"Pair": f"{d[0]} & {d[1](https://rapidapi.com/sportcontentapi/api/golf-leaderboard-data "inline-citation")}", "Count": c} for d, c in Counter(pairs).most_common(5)]), hide_index=True)
 
 # TAB 5: REGISTRY DATA
 with tab_data:
