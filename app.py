@@ -169,7 +169,6 @@ with tab_lead:
             st.error(f"Error: {e}")
 
 # TAB 2: OFFICIAL MASTER BOARD
-# TAB 2: OFFICIAL MASTER BOARD
 with tab_field:
     st.header("Official 154th Open Leaderboard")
     if live_rows:
@@ -177,22 +176,28 @@ with tab_field:
         for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
             
-            # SURGICAL FIX: Use the same robust parsing as your round_avgs function
-            score = 0
+            # FIX: Manually sum rounds to capture scores for 'F' (Finished) players like Ryan Fox
+            calculated_score = 0
             for rd in r.get('rounds', []):
-                score += parse_score_to_int(rd.get('scoreToPar'))
+                val = rd.get('scoreToPar')
+                # Only add if the value is a number or numeric string
+                if val is not None:
+                    try:
+                        calculated_score += int(val)
+                    except (ValueError, TypeError):
+                        pass
                 
             pos = str(r.get('position', ''))
             master_list.append({
                 "Pos": pos if pos else "CUT", 
                 "Golfer": name, 
                 "Thru": r.get('thru'), 
-                "Score": format_score_val(score), 
-                "Sort": score
+                "Score": format_score_val(calculated_score), 
+                "Sort": calculated_score
             })
 
         st.subheader("🥇 Championship Leaders")
-        # Ensure we sort by the calculated integer total
+        # Re-sorting ensures the leaders stay at the top even if API 'position' lags
         sorted_master = sorted(master_list, key=lambda x: x['Sort'])
         top_5 = sorted_master[:5]
         
@@ -209,6 +214,11 @@ with tab_field:
         st.dataframe(
             pd.DataFrame(sorted_master)[["Pos", "Golfer", "Thru", "Score"]], 
             hide_index=True, 
+            column_config={
+                "Pos": st.column_config.TextColumn("Pos", width=50),
+                "Thru": st.column_config.TextColumn("Thru", width=60),
+                "Score": st.column_config.TextColumn("Score", width=60),
+            },
             use_container_width=True
         )
 
