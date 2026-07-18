@@ -10,227 +10,257 @@ from itertools import combinations
 st.set_page_config(page_title="154th Open Championship Tracker", layout="wide")
 
 st.markdown("""
-    <style>
-    .main { background-color: #0B1221; color: #F1E9DB; }
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #1E293B;
-        border: 1px solid #D4AF37;
-        padding: 10px 20px;
-        color: #D4AF37;
-        font-weight: bold;
-    }
-    .stTabs [aria-selected="true"] { background-color: #D4AF37 !important; color: #0B1221 !important; }
-    </style>
+   <style>
+   .main { background-color: #0B1221; color: #F1E9DB; }
+   [data-testid="stHeader"] { background: rgba(0,0,0,0); }
+   .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+   .stTabs [data-baseweb="tab"] {
+       background-color: #1E293B;
+       border: 1px solid #D4AF37;
+       padding: 10px 20px;
+       color: #D4AF37;
+       font-weight: bold;
+       border-radius: 4px 4px 0 0;
+   }
+   .stTabs [aria-selected="true"] { background-color: #D4AF37 !important; color: #0B1221 !important; }
+   </style>
 """, unsafe_allow_html=True)
-
-# --- HELPER: DATA PARSING & FORMATTING ---
-def parse_score_to_int(val):
-    if isinstance(val, dict):
-        return int(val.get('$numberInt', 0))
-    try:
-        return int(val) if val is not None else 0
-    except:
-        return 0
-
-def format_score_val(val):
-    if val == 0: return "E"
-    if val > 0: return f"+{val}"
-    return str(val)
-
-def bold_text(text):
-    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    bold_chars = "𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"
-    trans = str.maketrans(chars, bold_chars)
-    return text.translate(trans)
 
 # --- 2. AUTHENTICATION ---
 @st.cache_resource
 def get_sheet():
-    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    creds_dict = {
-        "type": st.secrets["connections"]["gsheets"]["type"],
-        "project_id": st.secrets["connections"]["gsheets"]["project_id"],
-        "private_key_id": st.secrets["connections"]["gsheets"]["private_key_id"],
-        "private_key": st.secrets["connections"]["gsheets"]["private_key"],
-        "client_email": st.secrets["connections"]["gsheets"]["client_email"],
-        "client_id": st.secrets["connections"]["gsheets"]["client_id"],
-        "auth_uri": st.secrets["connections"]["gsheets"]["auth_uri"],
-        "token_uri": st.secrets["connections"]["gsheets"]["token_uri"],
-        "auth_provider_x509_cert_url": st.secrets["connections"]["gsheets"]["auth_provider_x509_cert_url"],
-        "client_x509_cert_url": st.secrets["connections"]["gsheets"]["client_x509_cert_url"],
-    }
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-    client = gspread.authorize(creds)
-    return client.open("British Open Sheet").sheet1 
+    try:
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds_dict = {
+            "type": st.secrets["connections"]["gsheets"]["type"],
+            "project_id": st.secrets["connections"]["gsheets"]["project_id"],
+            "private_key_id": st.secrets["connections"]["gsheets"]["private_key_id"],
+            "private_key": st.secrets["connections"]["gsheets"]["private_key"],
+            "client_email": st.secrets["connections"]["gsheets"]["client_email"],
+            "client_id": st.secrets["connections"]["gsheets"]["client_id"],
+            "auth_uri": st.secrets["connections"]["gsheets"]["auth_uri"],
+            "token_uri": st.secrets["connections"]["gsheets"]["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["connections"]["gsheets"]["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": st.secrets["connections"]["gsheets"]["client_x509_cert_url"],
+        }
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        return client.open("British Open Sheet").sheet1
+    except Exception as e:
+        st.sidebar.error(f"Google Sheet Auth Failed: {e}")
+        return None
 
-# --- 3. CONFIG & FIELD DATA ---
-API_KEY = st.secrets["api_key"]
+# --- 3. CONFIG & API ---
+API_KEY = st.secrets.get("api_key", "")
 YEAR, TOURN_ID = "2026", "100"
 
-OFFICIAL_FIELD = ["Scottie Scheffler", "Rory McIlroy", "Matt Fitzpatrick", "Cameron Young", "Russell Henley", "Chris Gotterup", "Collin Morikawa", "Wyndham Clark", "Tommy Fleetwood", "Justin Rose", "Jon Rahm", "Viktor Hovland", "J.J. Spaun", "Xander Schauffele", "Robert MacIntyre", "Ben Griffin", "Aaron Rai", "Sam Burns", "Justin Thomas", "Ludvig Aberg", "Si Woo Kim", "Tyrrell Hatton", "Sepp Straka", "Min Woo Lee", "Alex Noren", "Patrick Reed", "Kristoffer Reitan", "Ryan Gerard", "Akshay Bhatia", "Jacob Bridgeman", "Hideki Matsuyama", "Harris English", "Tom Kim", "JT Poston", "Nicolai Hojgaard", "Kurt Kitayama", "Bryson DeChambeau", "Patrick Cantlay", "Maverick McNealy", "Bud Cauley", "Keegan Bradley", "Rickie Fowler", "Gary Woodland", "Alex Smalley", "Jake Knapp", "Shane Lowry", "Sam Stevens", "Joaquin Niemann", "Daniel Berger", "Marco Penge", "Jordan Spieth", "Nicolas Echavarria", "Corey Conners", "Jason Day", "Michael Kim", "Ryan Fox", "Adam Scott", "Eugenio Chacarra", "Michael Brennan", "Pierceson Coody", "Ryo Hisatsune", "Matt McCarty", "Brian Harman", "Alex Fitzpatrick", "David Puig", "Nick Taylor", "Keith Mitchell", "Andrew Novak", "Michael Thorbjornsen", "Eric Cole", "Matt Wallace", "Sami Valimaki", "Max Homa", "Harry Hall", "Max Greyserman", "Jordan Smith", "Thomas Detry", "Sahith Theegala", "Casey Jarvis", "Jayden Schaper", "Sungjae Im", "Rasmus Hojgaard", "Keita Nakajima", "Rasmus Neergaard-Petersen", "Shaun Norris", "John Parry", "Lucas Herbert", "Daniel Hillier", "Haotong Li", "Kota Kaneko", "Angel Ayora", "Jackson Suber", "Brooks Koepka", "Hennie du Plessis", "Andy Sullivan", "Adrien Saddier", "Jose Luis Ballester", "Tom McKibbin", "Daniel Brown", "Cameron Smith", "Laurie Canter", "Travis Smyth", "Michael Hollick", "Scott Vincent", "Dan Bradbury", "Bernd Wiesberger", "Joakim Lagergren", "Victor Perez", "Jesper Svensson", "Billy Horschel", "Martin Couvra", "Kazuki Higa", "Peter Uihlein", "Alistair Docherty", "Kazuma Kobori", "Antoine Rozner", "Francesco Laporta", "MJ Daffue", "Francesco Molinari", "Ren Yonezawa", "Frederic Lacroix", "Cameron John", "James Nicholas", "Caleb Surratt", "Matthew Jordan", "Naoyuki Kataoka", "Sam Bairstow", "Austen Truslow", "Jeongwoo Ham", "Aldrich Potgieter", "Matthew Southgate", "Ryutaro Nagano", "Jiho Yang", "Padraig Harrington", "Jack Buchanan", "Marcus Plunkett", "Matthew Baldwin", "Tiger Christensen", "Henrik Stenson", "Stewart Cink", "Stuart Grehan", "Darren Clarke", "Alejandro De Castro Piera", "Baard Bjoernevik Skogen", "David Duval", "David Howard", "Fifa Laopakdee", "Jack McDonald", "Johnny Keefer", "Lev Grinberg", "Mason Howell", "Mateo Pulcini", "Nevill Ruiter", "Tim Wiedemeyer", "Tom Sloman"]
-ELITE_30 = OFFICIAL_FIELD[:30]
-WILDCARD_FIELD = OFFICIAL_FIELD[30:]
-
-# --- 4. DATA FETCHING ---
 @st.cache_data(ttl=600)
-def get_live_data():
+def get_live_scores():
     try:
         url = "https://live-golf-data.p.rapidapi.com/leaderboard"
         headers = {"X-RapidAPI-Key": API_KEY, "X-RapidAPI-Host": "live-golf-data.p.rapidapi.com"}
         params = {"orgId": "1", "tournId": TOURN_ID, "year": YEAR}
         res = requests.get(url, headers=headers, params=params)
-        data = res.json()
-        return data.get('leaderboardRows', data.get('leaderboard', data.get('players', [])))
-    except Exception as e:
-        st.sidebar.error(f"API Sync Error: {e}")
-        return []
+        return res.json().get('leaderboardRows', []), res.status_code
+    except:
+        return [], 500
 
-# --- 5. MISSED CUT & PENALTY LOGIC ---
-live_rows = get_live_data()
-registry_data = get_sheet().get_all_records()
+def parse_score_to_int(s):
+    if isinstance(s, dict): s = s.get('$numberInt', 0)
+    if s is None or s in ['E', 'Even', '-', '', 'null']: return 0
+    try: return int(str(s).replace('+', ''))
+    except: return 0
 
-# Calculate Field Averages for Penalty (Rounds 3 & 4)
-def get_round_averages(rows):
-    avgs = {2: 0, 3: 0} # index for R3 and R4
-    for idx in [2, 3]:
+def format_score_val(val):
+    if val == 0: return "E"
+    return f"+{val}" if val > 0 else str(val)
+
+def get_round_averages(live_rows):
+    avgs = {1: 0, 2: 0, 3: 0, 4: 0}
+    for r_num in range(1, 5):
         scores = []
-        for r in rows:
-            rds = r.get('rounds', [])
-            if len(rds) > idx:
-                scores.append(parse_score_to_int(rds[idx].get('scoreToPar')))
+        for r in live_rows:
+            for rd_data in r.get('rounds', []):
+                rd_id = rd_data.get('roundId', {})
+                rd_val = int(rd_id.get('$numberInt', 0)) if isinstance(rd_id, dict) else int(rd_id)
+                if rd_val == r_num:
+                    s_raw = rd_data.get('scoreToPar')
+                    if s_raw is not None and s_raw != "":
+                        scores.append(parse_score_to_int(s_raw))
         if scores:
-            avgs[idx] = round(sum(scores) / len(scores))
+            avgs[r_num] = round(sum(scores) / len(scores))
     return avgs
 
-round_penalties = get_round_averages(live_rows)
+# --- 4. DATA LOAD ---
+live_rows, status_code = get_live_scores()
+round_avgs = get_round_averages(live_rows)
 
-pro_map = {}
-for r in live_rows:
-    p_name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip() or r.get('playerName', 'Unknown')
-    status = str(r.get('status', '')).upper()
-    
-    # Calculate base score from available rounds
-    calc_total = 0
-    rounds = r.get('rounds', [])
-    for rd in rounds:
-        calc_total += parse_score_to_int(rd.get('scoreToPar'))
-        
-    # Apply penalties for MC/WD/DQ for R3 and R4 if they happened
-    is_cut = status in ['CUT', 'MC', 'WD', 'DQ']
-    if is_cut:
-        if len(rounds) <= 2: calc_total += round_penalties[2] # R3 Penalty
-        if len(rounds) <= 3: calc_total += round_penalties[3] # R4 Penalty
+# SIDEBAR STATUS
+with st.sidebar:
+    st.header("âš™ï¸ System Status")
+    if status_code == 200:
+        st.success(f"Live API: Connected ({len(live_rows)} golfers)")
+    else:
+        st.error(f"API Error: Status {status_code}")
+    if st.button("Refresh Data"):
+        st.cache_data.clear()
+        st.rerun()
 
-    pro_map[p_name] = {
-        "score": calc_total,
-        "thru": r.get('thru', 'CUT' if is_cut else '-'),
-        "pos": r.get('position', 'CUT' if is_cut else '-'),
-        "is_cut": is_cut
-    }
+# --- 5. MAIN APP ---
+st.title("ðŸ† 154th Open Championship Tracker")
 
-# --- 6. APP LAYOUT ---
-st.title("🏆 154th Open Championship Tracker")
-
-tab_reg, tab_lead, tab_intel, tab_master, tab_winners, tab_registry = st.tabs([
-    "✍️ Registration", "📊 Standings", "🧠 Field Intel", "⛳ Master Board", "🥇 Round Winners", "📂 Registry"
+tab_lead, tab_field, tab_round, tab_intel, tab_data = st.tabs([
+"ðŸ“Š Live Standings", 
+"â›³ Official Master Board",
+"ðŸ† Round Winners",
+"ðŸ§  Field Intelligence", 
+"ðŸ“ Registry Data"
 ])
 
-# TAB: REGISTRATION
-with tab_reg:
-    st.header("Enter Your Team")
-    user_name = st.text_input("Participant Name")
-    col1, col2, col3 = st.columns(3)
-    with col1: p1 = st.selectbox("Player 1", OFFICIAL_FIELD, format_func=lambda x: bold_text(x) if x in ELITE_30 else x)
-    with col2: p2 = st.selectbox("Player 2", [p for p in OFFICIAL_FIELD if p != p1], format_func=lambda x: bold_text(x) if x in ELITE_30 else x)
-    with col3: p3 = st.selectbox("Wildcard", [p for p in WILDCARD_FIELD if p not in [p1, p2]])
-    if st.button("LOCK IN TEAM"):
-        if user_name:
-            get_sheet().append_row([user_name, p1, p2, p3])
-            st.success("Team Locked!")
-        else: st.warning("Enter a name.")
-
-# TAB: STANDINGS
+# TAB 1: LIVE STANDINGS
 with tab_lead:
-    st.header("Syndicate Standings")
-    if round_penalties[2] != 0 or round_penalties[3] != 0:
-        st.info(f"Penalty for Cut Players: R3 (+{round_penalties[2]}), R4 (+{round_penalties[3]})")
+    st.header("Tournament Standings")
+    sheet = get_sheet()
+    if sheet:
+        try:
+            raw_entries = sheet.get_all_records()
+            if raw_entries:
+                final_data = []
+                for entry in raw_entries:
+                    p_names = [str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))]
+                    user_name = str(entry.get("User", "Unknown"))
+                    if not p_names[0]: continue
+
+                    s_ints, s_disp = [], []
+                    for p_name in p_names:
+                        p_api = next((r for r in live_rows if f"{r.get('firstName')} {r.get('lastName')}".lower() == p_name.lower()), None)
+                        
+                        if p_api:
+                            pos = str(p_api.get('position', ''))
+                            actual_score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in p_api.get('rounds', []))
+                            
+                            # SAFETY CHECK: Only penalty if player is officially CUT, WD, or DQ
+                            if pos in ["CUT", "WD", "DQ"]:
+                                completed_rounds = []
+                                for rd in p_api.get('rounds', []):
+                                    r_id = rd.get('roundId', {})
+                                    completed_rounds.append(int(r_id.get('$numberInt', 0)) if isinstance(r_id, dict) else int(r_id))
+                                
+                                penalty = sum(round_avgs[r] for r in range(1, 5) if r not in completed_rounds)
+                                num = actual_score + penalty
+                                status = " (MC)"
+                            else:
+                                num, status = actual_score, ""
+                        else:
+                            num, status = 0, " (?)"
+
+                        s_ints.append(num)
+                        s_disp.append(f"{p_name} ({format_score_val(num)}){status}")
+
+                    final_data.append({"User": user_name, "P1": s_disp[0], "P2": s_disp[1], "P3": s_disp[2], "TotalInt": sum(s_ints)})
+
+                if final_data:
+                    df_s = pd.DataFrame(final_data).sort_values("TotalInt")
+                    df_s.insert(0, 'Rank', range(1, 1 + len(df_s)))
+                    df_s['Total'] = df_s['TotalInt'].apply(format_score_val)
+                    st.dataframe(df_s[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], hide_index=True, use_container_width=True)
+                    st.caption(f"Penalties for MC (Current Avg): R3: {format_score_val(round_avgs[3])}, R4: {format_score_val(round_avgs[4])}")
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+# TAB 2: OFFICIAL MASTER BOARD
+with tab_field:
+    st.header("Official 154th Open Leaderboard")
+    if live_rows:
+        master_list = []
+        for r in live_rows:
+            name = f"{r.get('firstName')} {r.get('lastName')}".strip()
+            score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in r.get('rounds', []))
+            pos = str(r.get('position', ''))
+            master_list.append({"Pos": pos if pos else "CUT", "Golfer": name, "Thru": r.get('thru'), "Score": format_score_val(score), "Sort": score})
+
+        st.subheader("ðŸ¥‡ Championship Leaders")
+        top_5 = sorted(master_list, key=lambda x: x['Sort'])[:5]
+        cols = st.columns(5)
+        for i, p in enumerate(top_5):
+            cols[i].metric(label=f"{p['Pos']} | Thru: {p['Thru']}", value=p['Golfer'], delta=f"Score: {p['Score']}", delta_color="inverse")
+
+        st.divider()
+        st.dataframe(pd.DataFrame(master_list)[["Pos", "Golfer", "Thru", "Score"]], hide_index=True, use_container_width=True)
+
+# TAB 3: ROUND WINNERS
+with tab_round:
+    st.header("Daily Performance Analysis")
+    sel_rd = st.radio("Select Round", ["Round 1", "Round 2", "Round 3", "Round 4"], horizontal=True)
+    target = int(sel_rd[-1])
+
+    if live_rows:
+        rd_scores = []
+        for r in live_rows:
+            name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
+            for rd in r.get('rounds', []):
+                rid = rd.get('roundId', {})
+                rid_val = int(rid.get('$numberInt', 0)) if isinstance(rid, dict) else int(rid)
+                if rid_val == target:
+                    rd_scores.append({"name": name, "score": parse_score_to_int(rd.get('scoreToPar'))})
         
-    user_results = []
-    for row in registry_data:
-        p_list = [row.get('P1'), row.get('P2'), row.get('P3')]
-        total_score = 0
-        p_details = []
-        for p in p_list:
-            p_info = pro_map.get(p, {"score": 0, "is_cut": False})
-            score = p_info['score']
-            total_score += score
-            label = f"{p} ({format_score_val(score)})"
-            if p_info['is_cut']: label += " (MC)"
-            p_details.append(label)
+        if rd_scores:
+            top_3 = sorted(rd_scores, key=lambda x: x['score'])[:3]
+            cols = st.columns(3)
+            for i, p in enumerate(top_3):
+                cols[i].metric(label=f"Rank {i+1}", value=p['name'], delta=f"Score: {format_score_val(p['score'])}", delta_color="inverse")
             
-        user_results.append({"User": row.get('User'), "P1": p_details[0], "P2": p_details[1], "P3": p_details[2], "Total": total_score})
-    
-    df_standings = pd.DataFrame(user_results).sort_values("Total")
-    df_standings.insert(0, "Rank", range(1, len(df_standings) + 1))
-    df_standings["Total"] = df_standings["Total"].apply(format_score_val)
-    st.dataframe(df_standings, hide_index=True, use_container_width=True)
+            st.divider()
+            st.subheader(f"ðŸ”¥ Daily Burners: {sel_rd}")
+            lookup = {p['name'].lower(): p['score'] for p in rd_scores}
+            raw_entries = get_sheet().get_all_records() if sheet else []
+            burners = []
+            for entry in raw_entries:
+                user = str(entry.get("User", "Unknown"))
+                picks = [str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))]
+                if not picks[0]: continue
+                
+                t_score, details = 0, []
+                for p in picks:
+                    s = lookup.get(p.lower())
+                    if s is None:
+                        p_stat = next((str(r.get('position', '')) for r in live_rows if f"{r.get('firstName')} {r.get('lastName')}".lower() == p.lower()), "")
+                        s = round_avgs.get(target, 0) if p_stat in ["CUT", "WD", "DQ"] else 0
+                    t_score += s
+                    details.append(f"{p} ({format_score_val(s)})")
+                burners.append({"User": user, "P1": details[0], "P2": details[1], "P3": details[2], "Rd Total": t_score})
 
-# TAB: FIELD INTEL
+            if burners:
+                df_b = pd.DataFrame(burners).sort_values("Rd Total")
+                df_b.insert(0, 'Rank', range(1, 1 + len(df_b)))
+                df_b['Rd Total'] = df_b['Rd Total'].apply(format_score_val)
+                st.dataframe(df_b, hide_index=True, use_container_width=True)
+
+# TAB 4: FIELD INTELLIGENCE
 with tab_intel:
-    st.header("Field Intelligence")
-    all_picks, triplets, duos = [], [], []
-    for row in registry_data:
-        team = sorted([row['P1'], row['P2'], row['P3']])
-        all_picks.extend(team)
-        triplets.append(tuple(team))
-        duos.extend(list(combinations(team, 2)))
-    ca, cb = st.columns(2)
-    with ca:
-        st.subheader("Most Picked Players")
-        df_p = pd.DataFrame(Counter(all_picks).most_common(10), columns=['Golfer', 'Count'])
-        st.dataframe(df_p, hide_index=True)
-    with cb:
-        st.subheader("Popular Pairs")
-        df_d = pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(duos).most_common(5)])
-        st.dataframe(df_d, hide_index=True)
+    st.header("Trends & Analysis")
+    if sheet:
+        raw = sheet.get_all_records()
+        if raw:
+            all_p, pairs = [], []
+            for row in raw:
+                picks = [str(row.get("P1", "")), str(row.get("P2", "")), str(row.get("P3", ""))]
+                if picks[0]:
+                    all_p.extend(picks)
+                    pairs.extend(list(combinations(sorted(picks), 2)))
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader("Most Selected Players")
+                st.dataframe(pd.DataFrame(Counter(all_p).most_common(10), columns=['Golfer', 'Selections']), hide_index=True)
+            with c2:
+                st.subheader("Most Popular Pairs")
+                st.dataframe(pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(pairs).most_common(5)]), hide_index=True)
 
-# TAB: MASTER BOARD
-with tab_master:
-    st.header("Official Leaderboard")
-    master_list = []
-    for name, d in pro_map.items():
-        master_list.append({
-            "Pos": d['pos'], 
-            "Golfer": name + (" (MC)" if d['is_cut'] else ""), 
-            "Thru": d['thru'], 
-            "Score": format_score_val(d['score']), 
-            "Sort": d['score']
-        })
-    sorted_m = sorted(master_list, key=lambda x: x['Sort'])
-    sc1, sc2, sc3, sc4, sc5 = st.columns(5)
-    for i, p in enumerate(sorted_m[:5]):
-        [sc1, sc2, sc3, sc4, sc5][i].metric(p['Golfer'], p['Score'], p['Pos'])
-    st.divider()
-    st.dataframe(pd.DataFrame(sorted_m)[["Pos", "Golfer", "Thru", "Score"]], hide_index=True, use_container_width=True)
-
-# TAB: ROUND WINNERS
-with tab_winners:
-    st.header("Daily Performance")
-    rs = st.radio("Round", ["Round 1", "Round 2", "Round 3", "Round 4"], horizontal=True)
-    ri = int(rs[-1]) - 1
-    dl = []
-    for r in live_rows:
-        rds = r.get('rounds', [])
-        if len(rds) > ri:
-            ds = parse_score_to_int(rds[ri].get('scoreToPar'))
-            name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip() or r.get('playerName', 'Unknown')
-            dl.append({"Golfer": name, "Score": ds})
-    if dl:
-        df_day = pd.DataFrame(dl).sort_values("Score")
-        st.dataframe(df_day, hide_index=True, use_container_width=True)
-
-# TAB: REGISTRY
-with tab_registry:
-    st.header("Registry Data")
-    st.dataframe(pd.DataFrame(registry_data), use_container_width=True)
+# TAB 5: REGISTRY DATA
+with tab_data:
+    st.header("Search Registry")
+    if sheet:
+        df_reg = pd.DataFrame(sheet.get_all_records())
+        df_reg.insert(0, '#', range(1, 1 + len(df_reg)))
+        st.dataframe(df_reg, hide_index=True, use_container_width=True)
