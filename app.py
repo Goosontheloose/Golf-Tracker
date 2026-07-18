@@ -97,7 +97,7 @@ round_avgs = get_round_averages(live_rows)
 
 # SIDEBAR STATUS
 with st.sidebar:
-    st.header("âš™ï¸ System Status")
+    st.header("⚙️ System Status")
     if status_code == 200:
         st.success(f"Live API: Connected ({len(live_rows)} golfers)")
     else:
@@ -107,14 +107,14 @@ with st.sidebar:
         st.rerun()
 
 # --- 5. MAIN APP ---
-st.title("ðŸ† 154th Open Championship Tracker")
+st.title("🏆154th Open Championship Tracker")
 
 tab_lead, tab_field, tab_round, tab_intel, tab_data = st.tabs([
-"ðŸ“Š Live Standings", 
-"â›³ Official Master Board",
-"ðŸ† Round Winners",
-"ðŸ§  Field Intelligence", 
-"ðŸ“ Registry Data"
+"🥇 Live Standings", 
+"⛳ Official Master Board",
+" 📊 Round Winners",
+"🧠  Field Intelligence", 
+"📂 Registry Data"
 ])
 
 # TAB 1: LIVE STANDINGS
@@ -179,7 +179,7 @@ with tab_field:
             pos = str(r.get('position', ''))
             master_list.append({"Pos": pos if pos else "CUT", "Golfer": name, "Thru": r.get('thru'), "Score": format_score_val(score), "Sort": score})
 
-        st.subheader("ðŸ¥‡ Championship Leaders")
+        st.subheader("⛳ Championship Leaders")
         top_5 = sorted(master_list, key=lambda x: x['Sort'])[:5]
         cols = st.columns(5)
         for i, p in enumerate(top_5):
@@ -211,7 +211,7 @@ with tab_round:
                 cols[i].metric(label=f"Rank {i+1}", value=p['name'], delta=f"Score: {format_score_val(p['score'])}", delta_color="inverse")
             
             st.divider()
-            st.subheader(f"ðŸ”¥ Daily Burners: {sel_rd}")
+            st.subheader(f"🔥 Daily Burners: {sel_rd}")
             lookup = {p['name'].lower(): p['score'] for p in rd_scores}
             raw_entries = get_sheet().get_all_records() if sheet else []
             burners = []
