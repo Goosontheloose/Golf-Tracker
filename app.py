@@ -137,7 +137,9 @@ with tab_lead:
                         
                         if p_api:
                             pos = str(p_api.get('position', ''))
-                            actual_score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in p_api.get('rounds', []))
+                         
+rounds = p_api.get('rounds', [])
+actual_score = parse_score_to_int(rounds[-1].get('scoreToPar')) if rounds else 0
                             
                             # SAFETY CHECK: Only penalty if player is officially CUT, WD, or DQ
                             if pos in ["CUT", "WD", "DQ"]:
@@ -175,7 +177,9 @@ with tab_field:
         master_list = []
         for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
-            score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in r.get('rounds', []))
+            
+rounds = r.get('rounds', [])
+score = parse_score_to_int(rounds[-1].get('scoreToPar')) if rounds else 0
             pos = str(r.get('position', ''))
             master_list.append({"Pos": pos if pos else "CUT", "Golfer": name, "Thru": r.get('thru'), "Score": format_score_val(score), "Sort": score})
 
