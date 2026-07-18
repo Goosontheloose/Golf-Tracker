@@ -169,24 +169,48 @@ with tab_lead:
             st.error(f"Error: {e}")
 
 # TAB 2: OFFICIAL MASTER BOARD
+# TAB 2: OFFICIAL MASTER BOARD
 with tab_field:
     st.header("Official 154th Open Leaderboard")
     if live_rows:
         master_list = []
         for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
-            score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in r.get('rounds', []))
+            
+            # SURGICAL FIX: Use the same robust parsing as your round_avgs function
+            score = 0
+            for rd in r.get('rounds', []):
+                score += parse_score_to_int(rd.get('scoreToPar'))
+                
             pos = str(r.get('position', ''))
-            master_list.append({"Pos": pos if pos else "CUT", "Golfer": name, "Thru": r.get('thru'), "Score": format_score_val(score), "Sort": score})
+            master_list.append({
+                "Pos": pos if pos else "CUT", 
+                "Golfer": name, 
+                "Thru": r.get('thru'), 
+                "Score": format_score_val(score), 
+                "Sort": score
+            })
 
         st.subheader("🥇 Championship Leaders")
-        top_5 = sorted(master_list, key=lambda x: x['Sort'])[:5]
+        # Ensure we sort by the calculated integer total
+        sorted_master = sorted(master_list, key=lambda x: x['Sort'])
+        top_5 = sorted_master[:5]
+        
         cols = st.columns(5)
         for i, p in enumerate(top_5):
-            cols[i].metric(label=f"{p['Pos']} | Thru: {p['Thru']}", value=p['Golfer'], delta=f"Score: {p['Score']}", delta_color="inverse")
+            cols[i].metric(
+                label=f"{p['Pos']} | Thru: {p['Thru']}", 
+                value=p['Golfer'], 
+                delta=f"Score: {p['Score']}", 
+                delta_color="inverse"
+            )
 
         st.divider()
-        st.dataframe(pd.DataFrame(master_list)[["Pos", "Golfer", "Thru", "Score"]], hide_index=True, use_container_width=True)
+        st.dataframe(
+            pd.DataFrame(sorted_master)[["Pos", "Golfer", "Thru", "Score"]], 
+            hide_index=True, 
+            use_container_width=True
+        )
 
 # TAB 3: ROUND WINNERS
 with tab_round:
