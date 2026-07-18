@@ -50,13 +50,6 @@ def get_sheet():
         st.sidebar.error(f"Google Sheet Auth Failed: {e}")
         return None
 
-@st.cache_data(ttl=600)
-def get_registry_data():
-    sheet = get_sheet()
-    if sheet:
-        return sheet.get_all_records()
-    return []
-
 # --- 3. CONFIG & API ---
 API_KEY = st.secrets.get("api_key", "")
 YEAR, TOURN_ID = "2026", "100"
@@ -101,7 +94,6 @@ def get_round_averages(live_rows):
 # --- 4. DATA LOAD ---
 live_rows, status_code = get_live_scores()
 round_avgs = get_round_averages(live_rows)
-registry_data = get_registry_data()
 
 # SIDEBAR STATUS
 with st.sidebar:
@@ -110,72 +102,71 @@ with st.sidebar:
         st.success(f"Live API: Connected ({len(live_rows)} golfers)")
     else:
         st.error(f"API Error: Status {status_code}")
-    if st.button("Refresh All Data"):
+    if st.button("Refresh Data"):
         st.cache_data.clear()
         st.rerun()
 
 # --- 5. MAIN APP ---
-st.title("🏆 154th Open Championship Tracker")
+st.title("🏆154th Open Championship Tracker")
 
 tab_lead, tab_field, tab_round, tab_intel, tab_data = st.tabs([
-"📊 Live Standings", 
+"🥇 Live Standings", 
 "⛳ Official Master Board",
-"🥇 Round Winners",
-"🧠 Field Intelligence", 
+" 📊 Round Winners",
+"🧠  Field Intelligence", 
 "📂 Registry Data"
 ])
 
 # TAB 1: LIVE STANDINGS
 with tab_lead:
     st.header("Tournament Standings")
-    if registry_data:
+    sheet = get_sheet()
+    if sheet:
         try:
-            final_data = []
-            for entry in registry_data:
-                p_names = [str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))]
-                user_name = str(entry.get("User", "Unknown"))
-                if not p_names[0]: continue
+            raw_entries = sheet.get_all_records()
+            if raw_entries:
+                final_data = []
+                for entry in raw_entries:
+                    p_names = [str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))]
+                    user_name = str(entry.get("User", "Unknown"))
+                    if not p_names[0]: continue
 
-                s_ints, s_disp = [], []
-                for p_name in p_names:
-                    p_api = next((r for r in live_rows if f"{r.get('firstName')} {r.get('lastName')}".lower() == p_name.lower()), None)
-                    
-                    if p_api:
-                        pos = str(p_api.get('position', ''))
+                    s_ints, s_disp = [], []
+                    for p_name in p_names:
+                        p_api = next((r for r in live_rows if f"{r.get('firstName')} {r.get('lastName')}".lower() == p_name.lower()), None)
                         
-                        # HYBRID SCORING LOGIC
-                        raw_api_total = p_api.get('totalToParValue', p_api.get('totalToPar'))
-                        if raw_api_total is not None and raw_api_total != "":
-                            player_total = parse_score_to_int(raw_api_total)
-                        else:
-                            # Fallback: Sum rounds if total field is null (The Fox Fix)
-                            player_total = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in p_api.get('rounds', []))
-                        
-                        if pos in ["CUT", "WD", "DQ"]:
-                            completed_rounds = []
-                            for rd in p_api.get('rounds', []):
-                                r_id = rd.get('roundId', {})
-                                completed_rounds.append(int(r_id.get('$numberInt', 0)) if isinstance(r_id, dict) else int(r_id))
+                        if p_api:
+                            pos = str(p_api.get('position', ''))
+                            # Pulling the official totalScoreToPar from API
+                            actual_score = parse_score_to_int(p_api.get('totalScoreToPar', 0))
                             
-                            penalty = sum(round_avgs[r] for r in range(1, 5) if r not in completed_rounds)
-                            num = player_total + penalty
-                            status = " (MC)"
+                            if pos in ["CUT", "WD", "DQ"]:
+                                player_rounds = p_api.get('rounds', [])
+                                completed_rounds = []
+                                for rd in player_rounds:
+                                    r_id = rd.get('roundId', {})
+                                    completed_rounds.append(int(r_id.get('$numberInt', 0)) if isinstance(r_id, dict) else int(r_id))
+                                
+                                penalty = sum(round_avgs[r] for r in range(1, 5) if r not in completed_rounds)
+                                num = actual_score + penalty
+                                status = " (MC)"
+                            else:
+                                num, status = actual_score, ""
                         else:
-                            num, status = player_total, ""
-                    else:
-                        num, status = 0, " (?)"
+                            num, status = 0, " (?)"
 
-                    s_ints.append(num)
-                    s_disp.append(f"{p_name} ({format_score_val(num)}){status}")
+                        s_ints.append(num)
+                        s_disp.append(f"{p_name} ({format_score_val(num)}){status}")
 
-                final_data.append({"User": user_name, "P1": s_disp[0], "P2": s_disp[1], "P3": s_disp[2], "TotalInt": sum(s_ints)})
+                    # FIXED LINE 161: Removed citations/URLs that caused the error
+                    final_data.append({"User": user_name, "P1": s_disp[0], "P2": s_disp[1], "P3": s_disp[2], "TotalInt": sum(s_ints)})
 
-            if final_data:
-                df_s = pd.DataFrame(final_data).sort_values("TotalInt")
-                df_s.insert(0, 'Rank', range(1, 1 + len(df_s)))
-                df_s['Total'] = df_s['TotalInt'].apply(format_score_val)
-                st.dataframe(df_s[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], hide_index=True, use_container_width=True)
-                st.caption(f"MC Penalties: R3: {format_score_val(round_avgs[3])}, R4: {format_score_val(round_avgs[4])}")
+                if final_data:
+                    df_s = pd.DataFrame(final_data).sort_values("TotalInt")
+                    df_s.insert(0, 'Rank', range(1, 1 + len(df_s)))
+                    df_s['Total'] = df_s['TotalInt'].apply(format_score_val)
+                    st.dataframe(df_s[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], hide_index=True, use_container_width=True)
+                    st.caption(f"Penalties for MC (Current Avg): R3: {format_score_val(round_avgs[3])}, R4: {format_score_val(round_avgs[4])}")
         except Exception as e:
             st.error(f"Error in Tab 1: {e}")
 
@@ -186,14 +177,7 @@ with tab_field:
         master_list = []
         for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
-            
-            # HYBRID SCORING LOGIC
-            raw_api_total = r.get('totalToParValue', r.get('totalToPar'))
-            if raw_api_total is not None and raw_api_total != "":
-                score = parse_score_to_int(raw_api_total)
-            else:
-                score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in r.get('rounds', []))
-            
+            score = parse_score_to_int(r.get('totalScoreToPar', 0))
             pos = str(r.get('position', ''))
             master_list.append({"Pos": pos if pos else "CUT", "Golfer": name, "Thru": r.get('thru'), "Score": format_score_val(score), "Sort": score})
 
@@ -231,8 +215,9 @@ with tab_round:
             st.divider()
             st.subheader(f"🔥 Daily Burners: {sel_rd}")
             lookup = {p['name'].lower(): p['score'] for p in rd_scores}
+            raw_entries = get_sheet().get_all_records() if sheet else []
             burners = []
-            for entry in registry_data:
+            for entry in raw_entries:
                 user = str(entry.get("User", "Unknown"))
                 picks = [str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))]
                 if not picks[0]: continue
@@ -256,26 +241,28 @@ with tab_round:
 # TAB 4: FIELD INTELLIGENCE
 with tab_intel:
     st.header("Trends & Analysis")
-    if registry_data:
-        all_p, pairs = [], []
-        for row in registry_data:
-            picks = [str(row.get("P1", "")), str(row.get("P2", "")), str(row.get("P3", ""))]
-            if picks[0]:
-                all_p.extend(picks)
-                pairs.extend(list(combinations(sorted(picks), 2)))
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            st.subheader("Most Selected Players")
-            st.dataframe(pd.DataFrame(Counter(all_p).most_common(10), columns=['Golfer', 'Selections']), hide_index=True)
-        with c2:
-            st.subheader("Most Popular Pairs")
-            st.dataframe(pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(pairs).most_common(5)]), hide_index=True)
+    if sheet:
+        raw = sheet.get_all_records()
+        if raw:
+            all_p, pairs = [], []
+            for row in raw:
+                picks = [str(row.get("P1", "")), str(row.get("P2", "")), str(row.get("P3", ""))]
+                if picks[0]:
+                    all_p.extend(picks)
+                    pairs.extend(list(combinations(sorted(picks), 2)))
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader("Most Selected Players")
+                st.dataframe(pd.DataFrame(Counter(all_p).most_common(10), columns=['Golfer', 'Selections']), hide_index=True)
+            with c2:
+                st.subheader("Most Popular Pairs")
+                st.dataframe(pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(pairs).most_common(5)]), hide_index=True)
 
 # TAB 5: REGISTRY DATA
 with tab_data:
     st.header("Search Registry")
-    if registry_data:
-        df_reg = pd.DataFrame(registry_data)
+    if sheet:
+        df_reg = pd.DataFrame(sheet.get_all_records())
         df_reg.insert(0, '#', range(1, 1 + len(df_reg)))
         st.dataframe(df_reg, hide_index=True, use_container_width=True)
