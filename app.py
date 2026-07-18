@@ -174,74 +174,48 @@ with tab_field:
     if live_rows:
         master_list = []
         for r in live_rows:
-            # 1. Handle Names (Check both firstName/lastName and playerName)
-            f_name = r.get('firstName', '')
-            l_name = r.get('lastName', '')
-            p_name = r.get('playerName', '')
-            name = f"{f_name} {l_name}".strip() if f_name or l_name else p_name
-            
-            # 2. Robust Scoring: Use 'totalToParValue' first, then 'totalToPar', then sum rounds
-            # This ensures 'F' players like Ryan Fox don't default to 'E'
-            score_val = r.get('totalToParValue')
-            if score_val is None:
-                score_val = r.get('totalToPar')
-            
-            # If API fields are null, manually sum the rounds
-            if score_val is None or score_val == "":
-                score_val = 0
-                rounds = r.get('rounds', [])
-                if rounds:
-                    for rd in rounds:
-                        rd_score = rd.get('scoreToPar')
-                        if rd_score is not None:
-                            try:
-                                score_val += int(rd_score)
-                            except: pass
-                else:
-                    score_val = 0 # Default to Even if no data at all
-            else:
-                try:
-                    score_val = int(score_val)
-                except:
-                    score_val = 0
+            # 1. Direct Name Mapping
+            name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
+            if not name: name = r.get('playerName', 'Unknown')
 
-            # 3. Handle Position and Thru status
-            pos = str(r.get('position', ''))
-            thru_val = str(r.get('thru', ''))
-            if not thru_val or thru_val == "None":
-                thru_val = "-" # Blank for players who haven't started
+            # 2. THE FIX: Pull 'total' (Strokes) and subtract Par (71 per round)
+            # This is the only way to get Ryan Fox's -8 if totalToPar is null
+            total_strokes = r.get('total')
+            current_round = r.get('roundNum', 3) # Default to 3 for Moving Day
+            
+            try:
+                # Calculate: Total Strokes - (Par 71 * Rounds Played)
+                # If R3 is in progress, Fox has played 3 rounds.
+                score_val = int(total_strokes) - (71 * int(current_round))
+            except:
+                # Fallback to totalToPar if strokes are missing
+                score_val = r.get('totalToParValue', 0)
+
+            # 3. Handle Status
+            thru_val = r.get('thru', '-')
+            pos = r.get('position', '-')
 
             master_list.append({
-                "Pos": pos if pos else "-", 
-                "Golfer": name, 
-                "Thru": thru_val, 
-                "Score": format_score_val(score_val), 
+                "Pos": pos,
+                "Golfer": name,
+                "Thru": thru_val,
+                "Score": format_score_val(score_val),
                 "Sort": score_val
             })
 
-        # Re-sort the list to ensure actual leaders (like Fox) are at the top
+        # Re-sort and Display
         sorted_master = sorted(master_list, key=lambda x: x['Sort'])
         
         st.subheader("🥇 Championship Leaders")
         top_5 = sorted_master[:5]
         cols = st.columns(5)
         for i, p in enumerate(top_5):
-            cols[i].metric(
-                label=f"{p['Pos']} | Thru: {p['Thru']}", 
-                value=p['Golfer'], 
-                delta=f"Score: {p['Score']}", 
-                delta_color="inverse"
-            )
+            cols[i].metric(label=f"{p['Pos']} | Thru: {p['Thru']}", value=p['Golfer'], delta=p['Score'], delta_color="inverse")
 
         st.divider()
         st.dataframe(
             pd.DataFrame(sorted_master)[["Pos", "Golfer", "Thru", "Score"]], 
-            hide_index=True, 
-            column_config={
-                "Pos": st.column_config.TextColumn("Pos", width=60),
-                "Thru": st.column_config.TextColumn("Thru", width=80),
-                "Score": st.column_config.TextColumn("Score", width=80),
-            },
+            hide_index=True,
             use_container_width=True
         )
 
