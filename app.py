@@ -133,7 +133,7 @@ with tab_lead:
 
                     s_ints, s_disp = [], []
                     for p_name in p_names:
-                        p_api = next((r for r in live_rows if f None)
+                        p_api = next((r for r in live_rows if f"{r.get('firstName')} {r.get('lastName')}".lower() == p_name.lower()), None)
                         
                         if p_api:
                             pos = str(p_api.get('position', ''))
@@ -157,4 +157,110 @@ with tab_lead:
                         s_ints.append(num)
                         s_disp.append(f"{p_name} ({format_score_val(num)}){status}")
 
-                    final_data.append({"User": user_name, "P1": s_disp[0], "P2": s_disp
+                    final_data.append({"User": user_name, "P1": s_disp[0], "P2": s_disp[1], "P3": s_disp[2], "TotalInt": sum(s_ints)})
+
+                if final_data:
+                    df_s = pd.DataFrame(final_data).sort_values("TotalInt")
+                    df_s.insert(0, 'Rank', range(1, 1 + len(df_s)))
+                    df_s['Total'] = df_s['TotalInt'].apply(format_score_val)
+                    st.dataframe(df_s[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], hide_index=True, use_container_width=True)
+                    st.caption(f"Penalties for MC (Current Avg): R3: {format_score_val(round_avgs[3])}, R4: {format_score_val(round_avgs[4])}")
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+# TAB 2: OFFICIAL MASTER BOARD
+with tab_field:
+    st.header("Official 154th Open Leaderboard")
+    if live_rows:
+        master_list = []
+        for r in live_rows:
+            name = f"{r.get('firstName')} {r.get('lastName')}".strip()
+            score = sum(parse_score_to_int(rd.get('scoreToPar')) for rd in r.get('rounds', []))
+            pos = str(r.get('position', ''))
+            master_list.append({"Pos": pos if pos else "CUT", "Golfer": name, "Thru": r.get('thru'), "Score": format_score_val(score), "Sort": score})
+
+        st.subheader("🥇 Championship Leaders")
+        top_5 = sorted(master_list, key=lambda x: x['Sort'])[:5]
+        cols = st.columns(5)
+        for i, p in enumerate(top_5):
+            cols[i].metric(label=f"{p['Pos']} | Thru: {p['Thru']}", value=p['Golfer'], delta=f"Score: {p['Score']}", delta_color="inverse")
+
+        st.divider()
+        st.dataframe(pd.DataFrame(master_list)[["Pos", "Golfer", "Thru", "Score"]], hide_index=True, use_container_width=True)
+
+# TAB 3: ROUND WINNERS
+with tab_round:
+    st.header("Daily Performance Analysis")
+    sel_rd = st.radio("Select Round", ["Round 1", "Round 2", "Round 3", "Round 4"], horizontal=True)
+    target = int(sel_rd[-1])
+
+    if live_rows:
+        rd_scores = []
+        for r in live_rows:
+            name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
+            for rd in r.get('rounds', []):
+                rid = rd.get('roundId', {})
+                rid_val = int(rid.get('$numberInt', 0)) if isinstance(rid, dict) else int(rid)
+                if rid_val == target:
+                    rd_scores.append({"name": name, "score": parse_score_to_int(rd.get('scoreToPar'))})
+        
+        if rd_scores:
+            top_3 = sorted(rd_scores, key=lambda x: x['score'])[:3]
+            cols = st.columns(3)
+            for i, p in enumerate(top_3):
+                cols[i].metric(label=f"Rank {i+1}", value=p['name'], delta=f"Score: {format_score_val(p['score'])}", delta_color="inverse")
+            
+            st.divider()
+            st.subheader(f"🔥 Daily Burners: {sel_rd}")
+            lookup = {p['name'].lower(): p['score'] for p in rd_scores}
+            raw_entries = get_sheet().get_all_records() if sheet else []
+            burners = []
+            for entry in raw_entries:
+                user = str(entry.get("User", "Unknown"))
+                picks = [str(entry.get("P1", "")), str(entry.get("P2", "")), str(entry.get("P3", ""))]
+                if not picks[0]: continue
+                
+                t_score, details = 0, []
+                for p in picks:
+                    s = lookup.get(p.lower())
+                    if s is None:
+                        p_stat = next((str(r.get('position', '')) for r in live_rows if f"{r.get('firstName')} {r.get('lastName')}".lower() == p.lower()), "")
+                        s = round_avgs.get(target, 0) if p_stat in ["CUT", "WD", "DQ"] else 0
+                    t_score += s
+                    details.append(f"{p} ({format_score_val(s)})")
+                burners.append({"User": user, "P1": details[0], "P2": details[1], "P3": details[2], "Rd Total": t_score})
+
+            if burners:
+                df_b = pd.DataFrame(burners).sort_values("Rd Total")
+                df_b.insert(0, 'Rank', range(1, 1 + len(df_b)))
+                df_b['Rd Total'] = df_b['Rd Total'].apply(format_score_val)
+                st.dataframe(df_b, hide_index=True, use_container_width=True)
+
+# TAB 4: FIELD INTELLIGENCE
+with tab_intel:
+    st.header("Trends & Analysis")
+    if sheet:
+        raw = sheet.get_all_records()
+        if raw:
+            all_p, pairs = [], []
+            for row in raw:
+                picks = [str(row.get("P1", "")), str(row.get("P2", "")), str(row.get("P3", ""))]
+                if picks[0]:
+                    all_p.extend(picks)
+                    pairs.extend(list(combinations(sorted(picks), 2)))
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader("Most Selected Players")
+                st.dataframe(pd.DataFrame(Counter(all_p).most_common(10), columns=['Golfer', 'Selections']), hide_index=True)
+            with c2:
+                st.subheader("Most Popular Pairs")
+                st.dataframe(pd.DataFrame([{"Pair": f"{d[0]} & {d[1]}", "Count": c} for d, c in Counter(pairs).most_common(5)]), hide_index=True)
+
+# TAB 5: REGISTRY DATA
+with tab_data:
+    st.header("Search Registry")
+    if sheet:
+        df_reg = pd.DataFrame(sheet.get_all_records())
+        df_reg.insert(0, '#', range(1, 1 + len(df_reg)))
+        st.dataframe(df_reg, hide_index=True, use_container_width=True)
