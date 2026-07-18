@@ -174,48 +174,61 @@ with tab_field:
     if live_rows:
         master_list = []
         for r in live_rows:
-            # 1. Direct Name Mapping
-            name = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
+            # 1. Name Mapping
+            f_name = r.get('firstName', '')
+            l_name = r.get('lastName', '')
+            name = f"{f_name} {l_name}".strip()
             if not name: name = r.get('playerName', 'Unknown')
 
-            # 2. THE FIX: Pull 'total' (Strokes) and subtract Par (71 per round)
-            # This is the only way to get Ryan Fox's -8 if totalToPar is null
-            total_strokes = r.get('total')
-            current_round = r.get('roundNum', 3) # Default to 3 for Moving Day
+            # 2. THE FIX: Use totalToParValue directly. 
+            # This avoids the -221 math error.
+            score_val = r.get('totalToParValue')
             
+            # Fallback for 'F' (Finished) players if totalToParValue is null
+            if score_val is None:
+                score_val = r.get('totalToPar')
+            
+            # Final conversion to integer to ensure sorting works
             try:
-                # Calculate: Total Strokes - (Par 71 * Rounds Played)
-                # If R3 is in progress, Fox has played 3 rounds.
-                score_val = int(total_strokes) - (71 * int(current_round))
-            except:
-                # Fallback to totalToPar if strokes are missing
-                score_val = r.get('totalToParValue', 0)
+                score_val = int(score_val)
+            except (ValueError, TypeError):
+                score_val = 0 # Default to Even
 
-            # 3. Handle Status
+            # 3. Status and Position
             thru_val = r.get('thru', '-')
-            pos = r.get('position', '-')
+            pos = str(r.get('position', ''))
 
             master_list.append({
-                "Pos": pos,
+                "Pos": pos if pos else "-",
                 "Golfer": name,
                 "Thru": thru_val,
                 "Score": format_score_val(score_val),
                 "Sort": score_val
             })
 
-        # Re-sort and Display
+        # Re-sort ensures leaders stay at the top
         sorted_master = sorted(master_list, key=lambda x: x['Sort'])
         
         st.subheader("🥇 Championship Leaders")
         top_5 = sorted_master[:5]
         cols = st.columns(5)
         for i, p in enumerate(top_5):
-            cols[i].metric(label=f"{p['Pos']} | Thru: {p['Thru']}", value=p['Golfer'], delta=p['Score'], delta_color="inverse")
+            cols[i].metric(
+                label=f"{p['Pos']} | Thru: {p['Thru']}", 
+                value=p['Golfer'], 
+                delta=f"Score: {p['Score']}", 
+                delta_color="inverse"
+            )
 
         st.divider()
         st.dataframe(
             pd.DataFrame(sorted_master)[["Pos", "Golfer", "Thru", "Score"]], 
             hide_index=True,
+            column_config={
+                "Pos": st.column_config.TextColumn("Pos", width=60),
+                "Thru": st.column_config.TextColumn("Thru", width=80),
+                "Score": st.column_config.TextColumn("Score", width=80),
+            },
             use_container_width=True
         )
 
