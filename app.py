@@ -174,33 +174,56 @@ with tab_field:
     if live_rows:
         master_list = []
         for r in live_rows:
-            name = f"{r.get('firstName')} {r.get('lastName')}".strip()
+            # 1. Handle Names (Check both firstName/lastName and playerName)
+            f_name = r.get('firstName', '')
+            l_name = r.get('lastName', '')
+            p_name = r.get('playerName', '')
+            name = f"{f_name} {l_name}".strip() if f_name or l_name else p_name
             
-            # FIX: Manually sum rounds to capture scores for 'F' (Finished) players like Ryan Fox
-            calculated_score = 0
-            for rd in r.get('rounds', []):
-                val = rd.get('scoreToPar')
-                # Only add if the value is a number or numeric string
-                if val is not None:
-                    try:
-                        calculated_score += int(val)
-                    except (ValueError, TypeError):
-                        pass
-                
+            # 2. Robust Scoring: Use 'totalToParValue' first, then 'totalToPar', then sum rounds
+            # This ensures 'F' players like Ryan Fox don't default to 'E'
+            score_val = r.get('totalToParValue')
+            if score_val is None:
+                score_val = r.get('totalToPar')
+            
+            # If API fields are null, manually sum the rounds
+            if score_val is None or score_val == "":
+                score_val = 0
+                rounds = r.get('rounds', [])
+                if rounds:
+                    for rd in rounds:
+                        rd_score = rd.get('scoreToPar')
+                        if rd_score is not None:
+                            try:
+                                score_val += int(rd_score)
+                            except: pass
+                else:
+                    score_val = 0 # Default to Even if no data at all
+            else:
+                try:
+                    score_val = int(score_val)
+                except:
+                    score_val = 0
+
+            # 3. Handle Position and Thru status
             pos = str(r.get('position', ''))
+            thru_val = str(r.get('thru', ''))
+            if not thru_val or thru_val == "None":
+                thru_val = "-" # Blank for players who haven't started
+
             master_list.append({
-                "Pos": pos if pos else "CUT", 
+                "Pos": pos if pos else "-", 
                 "Golfer": name, 
-                "Thru": r.get('thru'), 
-                "Score": format_score_val(calculated_score), 
-                "Sort": calculated_score
+                "Thru": thru_val, 
+                "Score": format_score_val(score_val), 
+                "Sort": score_val
             })
 
-        st.subheader("🥇 Championship Leaders")
-        # Re-sorting ensures the leaders stay at the top even if API 'position' lags
+        # Re-sort the list to ensure actual leaders (like Fox) are at the top
         sorted_master = sorted(master_list, key=lambda x: x['Sort'])
-        top_5 = sorted_master[:5]
         
+        st.subheader("🥇 Championship Leaders")
+        top_5 = sorted_master[:5]
         cols = st.columns(5)
         for i, p in enumerate(top_5):
             cols[i].metric(
@@ -215,9 +238,9 @@ with tab_field:
             pd.DataFrame(sorted_master)[["Pos", "Golfer", "Thru", "Score"]], 
             hide_index=True, 
             column_config={
-                "Pos": st.column_config.TextColumn("Pos", width=50),
-                "Thru": st.column_config.TextColumn("Thru", width=60),
-                "Score": st.column_config.TextColumn("Score", width=60),
+                "Pos": st.column_config.TextColumn("Pos", width=60),
+                "Thru": st.column_config.TextColumn("Thru", width=80),
+                "Score": st.column_config.TextColumn("Score", width=80),
             },
             use_container_width=True
         )
