@@ -122,8 +122,7 @@ with tab_lead:
     st.header("Tournament Standings")
     sheet = get_sheet()
     if sheet:
-    
-            try:
+        try:
             raw_entries = sheet.get_all_records()
             if raw_entries:
                 final_data = []
@@ -138,7 +137,7 @@ with tab_lead:
                         
                         if p_api:
                             pos = str(p_api.get('position', ''))
-                            # FIX: Get cumulative score from the most recent round instead of summing
+                            # LOGIC: Get cumulative score from the most recent round instead of summing
                             player_rounds = p_api.get('rounds', [])
                             actual_score = parse_score_to_int(player_rounds[-1].get('scoreToPar')) if player_rounds else 0
                             
@@ -175,17 +174,12 @@ with tab_field:
     st.header("Official 154th Open Leaderboard")
     if live_rows:
         master_list = []
-            for r in live_rows:
+        for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
-            # FIX: Get cumulative score from the most recent round instead of summing
+            # LOGIC: Get cumulative score from the most recent round instead of summing
             player_rounds = r.get('rounds', [])
             score = parse_score_to_int(player_rounds[-1].get('scoreToPar')) if player_rounds else 0
             
-            pos = str(r.get('position', ''))
-            master_list.append({"Pos": pos if pos else "CUT", "Golfer": name, "Thru": r.get('thru'), "Score": format_score_val(score), "Sort": score})
-            
-rounds = r.get('rounds', [])
-score = parse_score_to_int(rounds[-1].get('scoreToPar')) if rounds else 0
             pos = str(r.get('position', ''))
             master_list.append({"Pos": pos if pos else "CUT", "Golfer": name, "Thru": r.get('thru'), "Score": format_score_val(score), "Sort": score})
 
