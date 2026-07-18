@@ -122,8 +122,13 @@ round_avgs = get_round_averages(live_rows)
 # --- 6. MAIN APP ---
 st.title("🏆 154th Open Championship Tracker")
 
-tab_lead, tab_field, tab_round, tab_intel, tab_data = st.tabs([
-    "📊 Live Standings", "⛳ Official Master Board", "🥇 Round Winners", "🧠 Field Intelligence", "📂 Registry Data"
+# Fix: Changed tab_field to tab_master to match the code below
+tab_lead, tab_master, tab_round, tab_intel, tab_data = st.tabs([
+    "📊 Live Standings", 
+    "⛳ Official Master Board", 
+    "🥇 Round Winners", 
+    "🧠 Field Intelligence", 
+    "📂 Registry Data"
 ])
 
 # TAB 1: LIVE STANDINGS
