@@ -122,7 +122,8 @@ with tab_lead:
     st.header("Tournament Standings")
     sheet = get_sheet()
     if sheet:
-        try:
+    
+            try:
             raw_entries = sheet.get_all_records()
             if raw_entries:
                 final_data = []
@@ -137,14 +138,13 @@ with tab_lead:
                         
                         if p_api:
                             pos = str(p_api.get('position', ''))
-                         
-rounds = p_api.get('rounds', [])
-actual_score = parse_score_to_int(rounds[-1].get('scoreToPar')) if rounds else 0
+                            # FIX: Get cumulative score from the most recent round instead of summing
+                            player_rounds = p_api.get('rounds', [])
+                            actual_score = parse_score_to_int(player_rounds[-1].get('scoreToPar')) if player_rounds else 0
                             
-                            # SAFETY CHECK: Only penalty if player is officially CUT, WD, or DQ
                             if pos in ["CUT", "WD", "DQ"]:
                                 completed_rounds = []
-                                for rd in p_api.get('rounds', []):
+                                for rd in player_rounds:
                                     r_id = rd.get('roundId', {})
                                     completed_rounds.append(int(r_id.get('$numberInt', 0)) if isinstance(r_id, dict) else int(r_id))
                                 
@@ -168,15 +168,21 @@ actual_score = parse_score_to_int(rounds[-1].get('scoreToPar')) if rounds else 0
                     st.dataframe(df_s[['Rank', 'User', 'P1', 'P2', 'P3', 'Total']], hide_index=True, use_container_width=True)
                     st.caption(f"Penalties for MC (Current Avg): R3: {format_score_val(round_avgs[3])}, R4: {format_score_val(round_avgs[4])}")
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Error in Tab 1: {e}")
 
 # TAB 2: OFFICIAL MASTER BOARD
 with tab_field:
     st.header("Official 154th Open Leaderboard")
     if live_rows:
         master_list = []
-        for r in live_rows:
+            for r in live_rows:
             name = f"{r.get('firstName')} {r.get('lastName')}".strip()
+            # FIX: Get cumulative score from the most recent round instead of summing
+            player_rounds = r.get('rounds', [])
+            score = parse_score_to_int(player_rounds[-1].get('scoreToPar')) if player_rounds else 0
+            
+            pos = str(r.get('position', ''))
+            master_list.append({"Pos": pos if pos else "CUT", "Golfer": name, "Thru": r.get('thru'), "Score": format_score_val(score), "Sort": score})
             
 rounds = r.get('rounds', [])
 score = parse_score_to_int(rounds[-1].get('scoreToPar')) if rounds else 0
