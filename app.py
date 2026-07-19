@@ -89,7 +89,7 @@ def get_registry_data():
 API_KEY = st.secrets.get("api_key", "")
 YEAR, TOURN_ID = "2026", "100"
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def get_live_scores():
     try:
         url = "https://live-golf-data.p.rapidapi.com/leaderboard"
